@@ -1,0 +1,16 @@
+PHASE60PLUS V5.8 PWA
+
+Fichiers :
+- index.html : application Phase60Plus
+- manifest.webmanifest : configuration d'installation Android
+- service-worker.js : cache hors connexion
+- icon-192.png / icon-512.png : icônes d'application
+
+INSTALLATION ANDROID
+1. Héberger ce dossier sur une adresse HTTPS.
+2. Ouvrir l'adresse HTTPS avec Chrome sur Android.
+3. Utiliser « Installer Phase60+ » ou Chrome > Installer l'application / Ajouter à l'écran d'accueil.
+
+IMPORTANT POUR LES DONNÉES
+Le stockage local d'une page ouverte en file:// et celui de la PWA hébergée en HTTPS sont des origines différentes.
+Avant de basculer définitivement, utiliser la fonction d'export/sauvegarde existante de Phase60Plus, puis restaurer cette sauvegarde dans la PWA.
