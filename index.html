@@ -998,3 +998,2709 @@ function normalizeStateV57(source, migratedFrom) {
     }
   });
   out.biweeklyAssessments = Array.isArray(src.biweeklyAssessments) ? src.biweeklyAssessments : [];
+  if (migratedFrom) out.migration = { from:migratedFrom, migratedAt:new Date().toISOString(), preservedLegacy:true };
+  return out;
+}
+function migrateLegacyStorageIfNeeded() {
+  if (localStorage.getItem(LS_KEY)) return;
+  const raw = localStorage.getItem(LEGACY_STATE_KEY);
+  if (raw) {
+    try {
+      const legacy = JSON.parse(raw);
+      const migrated = normalizeStateV57(legacy, LEGACY_STATE_KEY);
+      localStorage.setItem(LS_KEY, JSON.stringify(migrated));
+    } catch(e) {
+      localStorage.setItem(LS_BACKUP_KEY, JSON.stringify({savedAt:new Date().toISOString(), source:LEGACY_STATE_KEY, raw}));
+    }
+  }
+  if (!localStorage.getItem(CYCLE_STORAGE_KEY)) {
+    const legacyCycle = localStorage.getItem(LEGACY_CYCLE_KEY);
+    if (legacyCycle) {
+      try {
+        const rows = JSON.parse(legacyCycle);
+        if (Array.isArray(rows) && rows.length) {
+          const merged = CYCLE_WEEKS_DEFAULT.map((base,i)=>Object.assign({}, base, rows[i] || {}, {week:i + 1}));
+          localStorage.setItem(CYCLE_STORAGE_KEY, JSON.stringify(merged));
+        }
+      } catch(e) {}
+    }
+  }
+}
+function loadState() {
+  migrateLegacyStorageIfNeeded();
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && (parsed.logs === undefined || Array.isArray(parsed.logs))) return normalizeStateV57(parsed);
+      throw new Error('Structure de données invalide');
+    }
+  } catch(e) {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) localStorage.setItem(LS_BACKUP_KEY, JSON.stringify({savedAt:new Date().toISOString(), source:LS_KEY, raw}));
+    } catch(e2) {}
+  }
+  return cloneDefaultState();
+}
+function saveState() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+  catch(e) { console.warn('Sauvegarde impossible', e); }
+}
+let state = loadState();
+// La migration des charges peut avoir eu lieu pendant loadState() : rafraîchir immédiatement le cache en mémoire.
+CYCLE_WEEKS = getCycleWeeks();
+setInterval(saveState, 5 * 60 * 1000);
+
+// ============================================================
+// GESTION DE LA TENSION 
+// ============================================================
+function updateTension() {
+  const sys = parseInt(document.getElementById('sysInput').value) || 120;
+  const dia = parseInt(document.getElementById('diaInput').value) || 80;
+  const pulse = parseInt(document.getElementById('pulseInput').value) || 72;
+  const sun = parseFloat(document.getElementById('sunInput').value) || 0;
+  state.tension = { sys, dia, pulse, sun };
+  saveState();
+  updateStatus();
+  document.getElementById('tensionStatus').textContent = `${sys}/${dia} · Pouls ${pulse} · ☀️ ${sun}h`;
+  showToast(`Tension : ${sys}/${dia} · Pouls : ${pulse} · Bronzage : ${sun}h`);
+  if (dia >= 95) showToast('⚠️ Votre tension est élevée, reposez-vous.');
+  checkSunAlert(sys, dia, sun);
+  updateRecommendedSession();
+  renderAdaptiveRecommendation();
+}
+
+function updateTemperature() {
+  const tempInput = document.getElementById('tempInput');
+  if (!tempInput) return;
+  const temp = parseFloat(tempInput.value);
+  state.temperature = isNaN(temp) ? 24 : temp;
+  saveState();
+  updateStatus();
+  showToast(`Température enregistrée : ${state.temperature}°C`);
+}
+
+function checkSunAlert(sys, dia, sun) {
+  const alertDiv = document.getElementById('sunAlert');
+  const msgDiv = document.getElementById('sunAlertMsg');
+  if (sun > 2.5 && dia > 90) {
+    alertDiv.style.display = 'block';
+    msgDiv.innerHTML = `☀️ <b>Exposition solaire prolongée (${sun}h) associée à une tension élevée (${dia} mmHg).</b><br>Hydratez-vous et reposez-vous. Limitez le bronzage à 2h/jour.`;
+  } else if (sun > 3) {
+    alertDiv.style.display = 'block';
+    msgDiv.innerHTML = `☀️ Exposition solaire prolongée (${sun}h). Pensez à vous hydrater.`;
+  } else {
+    alertDiv.style.display = 'none';
+  }
+}
+
+function getTensionStatus() {
+  const sys = Number(state.tension?.sys) || 120;
+  const dia = Number(state.tension?.dia) || 80;
+  if (state.symptomsToday || sys >= 180 || dia >= 120) return 'red';
+  if (sys >= 160 || dia >= 100 || sys < 90 || dia < 55) return 'orange';
+  return 'green';
+}
+function isTrainingLocked() { return getTensionStatus() === 'red'; }
+
+function updateCalmMode(status) {
+  document.body.classList.toggle('calm-mode', status === 'red');
+}
+
+function updateStatus() {
+  const status = getTensionStatus();
+  const card = document.getElementById('statusCard');
+  const icon = document.getElementById('statusIcon');
+  const text = document.getElementById('statusText');
+  const sub = document.getElementById('statusSub');
+  const badge = document.getElementById('cycleLockBadge');
+  
+  card.className = 'status-card status-' + status;
+  
+  if (status === 'green') {
+    icon.textContent = '🟢';
+    text.textContent = 'Tous les modes autorisés';
+    text.style.color = 'var(--green-text)';
+    if (badge) { badge.textContent = '🔓 DÉVERROUILLÉ'; badge.style.color = 'var(--green-text)'; }
+  } else if (status === 'orange') {
+    icon.textContent = '🟡';
+    text.textContent = 'VTT Récupération uniquement (<14 km/h)';
+    text.style.color = 'var(--orange-text)';
+    if (badge) { badge.textContent = '⚠️ VTT RÉCUPÉRATION'; badge.style.color = 'var(--orange-text)'; }
+  } else {
+    icon.textContent = '🔴';
+    text.textContent = '⚠️ MUSCULATION VERROUILLÉE';
+    text.style.color = 'var(--red-text)';
+    if (badge) { badge.textContent = '🔒 EFFORT INTENSE VERROUILLÉ'; badge.style.color = 'var(--red-text)'; }
+  }
+  
+  const sys = state.tension?.sys || 120;
+  const dia = state.tension?.dia || 80;
+  const pulse = state.tension?.pulse || 72;
+  const sun = state.tension?.sun || 0;
+  sub.textContent = `Tension : ${sys}/${dia} · Pouls : ${pulse} · ☀️ ${sun}h · Diastolique ${dia < 90 ? '✅ OK' : '⚠️ ÉLEVÉE'}`;
+  
+  const temp = state.temperature ?? 24;
+  const tempInput = document.getElementById('tempInput');
+  if (tempInput && document.activeElement !== tempInput) tempInput.value = temp;
+  const heatWarning = document.getElementById('heatWarning');
+  if (temp > 28) {
+    heatWarning.style.display = 'block';
+    heatWarning.innerHTML = `🔥 <strong>Chaleur élevée (${temp}°C > 28°C)</strong> — Attention à l'hydratation. Évitez l'effort entre 12h et 16h.`;
+  } else {
+    heatWarning.style.display = 'none';
+  }
+  
+  updateRecommendedSession();
+  updatePotassiumGauge();
+  updateCalmMode(status);
+  renderAdaptiveRecommendation();
+  updateVitaminDDisplay();
+}
+
+function updateRecommendedSession() {
+  const status = getTensionStatus();
+  const dayMode = state.dayMode;
+  const msgDiv = document.getElementById('recommendedSession');
+  const lockMsgDiv = document.getElementById('sessionLockMsg');
+  
+  if (dayMode === 'recuperation') {
+    msgDiv.innerHTML = '🧘 <b>Mode Récupération</b> — Activités très légères (marche, étirements, respiration). Objectif calorique réduit à 1800 kcal.';
+    lockMsgDiv.style.display = 'none';
+    return;
+  }
+  if (dayMode === 'vacances') {
+    msgDiv.innerHTML = '🏖️ <b>Mode Vacances</b> — Activités légères (marche, yoga, natation). Objectif 1850 kcal.';
+    lockMsgDiv.style.display = 'none';
+    return;
+  }
+  
+  if (status === 'red') {
+    msgDiv.innerHTML = '⚠️ Musculation verrouillée. <b>Marche recommandée</b> (20-30 min) ou repos.';
+    lockMsgDiv.style.display = 'block';
+    lockMsgDiv.textContent = '⛔ Musculation verrouillée (DIA ≥ 95)';
+    lockMsgDiv.style.color = 'var(--red-text)';
+  } else if (status === 'orange') {
+    msgDiv.innerHTML = '🟡 VTT récupération autorisé (<14 km/h). <b>Marche recommandée</b> (30 min).';
+    lockMsgDiv.style.display = 'block';
+    lockMsgDiv.textContent = '⚠️ Musculation déconseillée (DIA ≥ 90)';
+    lockMsgDiv.style.color = 'var(--orange-text)';
+  } else {
+    msgDiv.innerHTML = '✅ Tous les modes autorisés. <b>Privilégiez la marche ou VTT léger</b> en phase de récupération.';
+    lockMsgDiv.style.display = 'none';
+  }
+}
+
+function updateHydration() {
+  const pre = parseFloat(document.getElementById('preWeight').value);
+  const post = parseFloat(document.getElementById('postWeight').value);
+  const adviceDiv = document.getElementById('hydrationAdvice');
+  
+  if (isNaN(pre) || isNaN(post)) {
+    adviceDiv.style.display = 'none';
+    return;
+  }
+  
+  const loss = pre - post;
+  const lossPercent = (loss / pre * 100).toFixed(1);
+  const temp = state.temperature ?? 24;
+  const isHot = temp > 28;
+  
+  let advice = '';
+  let color = 'var(--gold-text)';
+  let extra = '';
+  
+  if (isHot) { extra = ' Chaleur élevée → +0.5L d\'eau aujourd\'hui.'; }
+  
+  if (loss < 0.2) {
+    advice = `✅ Perte : ${loss.toFixed(1)} kg (${lossPercent}%) · Hydratation optimale.${extra}`;
+    color = 'var(--green-text)';
+  } else if (loss > 0.5) {
+    advice = `⚠️ Perte : ${loss.toFixed(1)} kg (${lossPercent}%) · ALERTE ! Buvez 500 ml d'eau + pastèque.${extra}`;
+    color = 'var(--red-text)';
+  } else {
+    advice = `🟡 Perte : ${loss.toFixed(1)} kg (${lossPercent}%) · Hydratation correcte. Buvez 250 ml.${extra}`;
+    color = 'var(--orange-text)';
+  }
+  
+  adviceDiv.style.display = 'block';
+  adviceDiv.style.borderLeftColor = color;
+  adviceDiv.innerHTML = `<h4 style="color:${color};">💧 Bilan hydrique</h4><p style="margin:0;">${advice}</p>`;
+}
+
+// ============================================================
+// POTASSIUM 
+// ============================================================
+function getEffectiveMealMacros(dayId, idx, meal) {
+  const replName = (state.mealReplacements[state.dayMode] && state.mealReplacements[state.dayMode][dayId] && state.mealReplacements[state.dayMode][dayId][idx]) || null;
+  if (replName) {
+    const recipe = FOOD_DB.find(f => f.name === replName && f.type === 'recette');
+    if (recipe) {
+      return { cal: recipe.kcal, p: recipe.p, c: recipe.c, f: recipe.f, k: recipe.potassium || 0, replaced: true, recipeName: replName };
+    }
+  }
+  let k = 0;
+  meal.foods.forEach(([name, qty]) => {
+    const qtyNum = parseFloat(qty) || 100;
+    const food = matchFoodDb(name);
+    if (food && food.potassium) k += (food.potassium / 100) * qtyNum;
+  });
+  return { cal: meal.m.calories, p: meal.m.protein, c: meal.m.carbs, f: meal.m.fat, k, replaced: false };
+}
+
+function getPotassiumTotals(dayId) {
+  const day = getDay(dayId);
+  if (!day) return 0;
+  let potassium = 0;
+  const eatenObj = (state.mealsEaten[state.dayMode] && state.mealsEaten[state.dayMode][dayId]) || {};
+  day.meals.forEach((meal, idx) => {
+    if (eatenObj[idx]) {
+      potassium += getEffectiveMealMacros(dayId, idx, meal).k;
+    }
+  });
+  if (dayId === isoWeekdayToDayId()) {
+    const extras = state.extras[todayKey()] || [];
+    extras.forEach(ex => {
+      potassium += ex.potassium || 0;
+    });
+  }
+  return Math.round(potassium);
+}
+
+function updatePotassiumGauge() {
+  const potassium = getPotassiumTotals(selectedDayId);
+  const target = Math.max(1, Number(state?.profile?.potassiumTarget) || 3500);
+  const pct = Math.min(100, (potassium / target) * 100);
+  const fill = document.getElementById('potassiumFill');
+  const current = document.getElementById('potassiumCurrent');
+  const targetEl = document.getElementById('potassiumTarget');
+  const titleEl = document.getElementById('potassiumTargetTitle');
+  const status = document.getElementById('potassiumStatus');
+  if (fill) fill.style.width = pct + '%';
+  if (current) current.textContent = potassium + ' mg';
+  if (targetEl) targetEl.textContent = target + ' mg';
+  if (titleEl) titleEl.textContent = `(objectif ${target} mg)`;
+  if (status) {
+    if (potassium >= target) {
+      status.textContent = '✅ Objectif atteint !';
+      status.style.color = 'var(--green-text)';
+    } else if (potassium >= target * 0.7) {
+      status.textContent = '🟡 En bonne voie';
+      status.style.color = 'var(--orange-text)';
+    } else {
+      status.textContent = '⚠️ Objectif non atteint';
+      status.style.color = 'var(--red-text)';
+    }
+  }
+}
+
+// ============================================================
+// ÉTAT DU JOUR 
+// ============================================================
+document.getElementById('fatigueInput')?.addEventListener('input', function() {
+  document.getElementById('fatigueVal').textContent = this.value + '/10';
+});
+document.getElementById('sleepInput')?.addEventListener('input', function() {
+  document.getElementById('sleepVal').textContent = this.value + '/10';
+});
+document.getElementById('stressInput')?.addEventListener('input', function() {
+  document.getElementById('stressVal').textContent = this.value + '/10';
+});
+
+function getDailyState(dateKey) {
+  return state.dailyState[dateKey || todayKey()] || null;
+}
+
+function renderDailyStateForm() {
+  const d = getDailyState(todayKey());
+  const fatigueInput = document.getElementById('fatigueInput');
+  const sleepInput = document.getElementById('sleepInput');
+  const stressInput = document.getElementById('stressInput');
+  const bedtimeInput = document.getElementById('bedtimeInput');
+  if (d) {
+    if (fatigueInput && document.activeElement !== fatigueInput) { fatigueInput.value = d.fatigue; document.getElementById('fatigueVal').textContent = d.fatigue + '/10'; }
+    if (sleepInput && document.activeElement !== sleepInput) { sleepInput.value = d.sleep; document.getElementById('sleepVal').textContent = d.sleep + '/10'; }
+    if (stressInput && document.activeElement !== stressInput) { stressInput.value = d.stress; document.getElementById('stressVal').textContent = d.stress + '/10'; }
+    if (bedtimeInput && document.activeElement !== bedtimeInput) bedtimeInput.value = d.bedtime || '';
+  }
+  renderDailyStateAlerts(d);
+}
+
+function renderDailyStateAlerts(d) {
+  const cont = document.getElementById('dailyStateAlerts');
+  if (!cont) return;
+  cont.innerHTML = '';
+  if (!d) return;
+  const alerts = [];
+  if (d.fatigue > 7) alerts.push({ color: 'var(--red-text)', msg: '😴 Fatigue élevée — repos recommandé.' });
+  if (d.sleep < 5) alerts.push({ color: 'var(--orange-text)', msg: '🌙 Sommeil insuffisant — couchez-vous plus tôt.' });
+  if (d.bedtime && d.bedtime > '23:30') alerts.push({ color: 'var(--orange-text)', msg: '🛏️ Coucher tardif (' + d.bedtime + '). Visez 22h30.' });
+  if (d.stress > 7) alerts.push({ color: 'var(--red-text)', msg: '😰 Stress élevé — respiration recommandée.' });
+  alerts.forEach(a => {
+    const div = document.createElement('div');
+    div.style.cssText = `font-size:0.8rem;color:${a.color};background:rgba(255,255,255,0.04);border-radius:6px;padding:6px 10px;`;
+    div.textContent = a.msg;
+    cont.appendChild(div);
+  });
+}
+
+function updateDailyState() {
+  const fatigue = parseInt(document.getElementById('fatigueInput').value) || 5;
+  const sleep = parseInt(document.getElementById('sleepInput').value) || 5;
+  const stress = parseInt(document.getElementById('stressInput').value) || 5;
+  const bedtime = document.getElementById('bedtimeInput').value || '';
+  state.dailyState[todayKey()] = { fatigue, sleep, stress, bedtime };
+  saveState();
+  renderDailyStateAlerts(state.dailyState[todayKey()]);
+  renderAdaptiveRecommendation();
+  showToast('🧠 État du jour enregistré');
+}
+
+// ============================================================
+// VITAMINE D3
+// ============================================================
+function toggleVitaminD() {
+  state.vitamineD = !state.vitamineD;
+  if (state.vitamineD) {
+    if (!state.vitamineDHistory) state.vitamineDHistory = {};
+    state.vitamineDHistory[todayKey()] = true;
+  }
+  saveState();
+  updateVitaminDDisplay();
+  showToast(state.vitamineD ? '💊 Vitamine D3 prise ✅' : '💊 Vitamine D3 annulée');
+}
+
+function updateVitaminDDisplay() {
+  const status = state.vitamineD ? '✅ Prise' : '⚪ Non prise';
+  const color = state.vitamineD ? 'var(--green-text)' : 'var(--ink-mute)';
+  document.getElementById('vitamineDDisplay').textContent = '💊 Vitamine D3 : ' + status;
+  document.getElementById('vitamineDDisplay').style.color = color;
+  const nutVit = document.getElementById('nutVitamineD');
+  if (nutVit) {
+    nutVit.textContent = '💊 Vitamine D3 : ' + status;
+    nutVit.style.color = color;
+  }
+}
+
+// ============================================================
+// RECOMMANDATION ADAPTATIVE
+// ============================================================
+function getAdaptiveRecommendation() {
+  const d = getDailyState(todayKey()) || { fatigue: 5, stress: 5 };
+  const dia = state.tension?.dia ?? 80;
+  const sun = state.tension?.sun ?? 0;
+  const fatigue = d.fatigue ?? 5;
+  const stress = d.stress ?? 5;
+  const dayMode = state.dayMode;
+
+  let main;
+  if (dayMode === 'recuperation') {
+    main = { icon: '🧘', color: 'var(--green-text)', title: 'Mode Récupération', msg: 'Repos, étirements, respiration. Pas d\'effort intense.' };
+  } else if (sun > 2.5 && dia > 90) {
+    main = { icon: '🚨', color: 'var(--red-text)', title: 'Alerte', msg: 'Bronzage + tension élevée. Repos à l\'ombre et pastèque.' };
+  } else if (fatigue > 7 && dia > 90) {
+    main = { icon: '🛑', color: 'var(--red-text)', title: 'Repos total', msg: 'Aujourd\'hui : repos complet.' };
+  } else if (fatigue > 5 && dia < 90) {
+    main = { icon: '🚶', color: 'var(--orange-text)', title: 'Marche', msg: 'Marche 20-30 min recommandée.' };
+  } else if (fatigue < 5 && dia < 90) {
+    main = { icon: '🚵', color: 'var(--green-text)', title: 'VTT léger', msg: 'VTT autorisé à 12 km/h max.' };
+  } else {
+    main = { icon: 'ℹ️', color: 'var(--ink-mute)', title: 'Journée neutre', msg: 'Suivez votre programme en douceur.' };
+  }
+
+  const extra = [];
+  if (stress > 7) {
+    extra.push({ icon: '🫁', color: 'var(--orange-text)', msg: 'Stress élevé — respiration 5 min recommandée.' });
+  }
+  if (!state.vitamineD && state.dayMode !== 'recuperation') {
+    extra.push({ icon: '💊', color: 'var(--gold-text)', msg: 'Vitamine D3 non prise aujourd\'hui (2000 UI recommandée).' });
+  }
+  return { main, extra };
+}
+
+function renderAdaptiveRecommendation() {
+  const cont = document.getElementById('adaptiveRecommendation');
+  if (!cont) return;
+  const { main, extra } = getAdaptiveRecommendation();
+  let html = `<div style="display:flex;gap:10px;align-items:flex-start;">
+    <span style="font-size:1.4rem;">${main.icon}</span>
+    <div><strong style="color:${main.color};">${main.title}</strong><div style="color:var(--ink-mute);font-size:0.85rem;margin-top:2px;">${main.msg}</div></div>
+  </div>`;
+  extra.forEach(e => {
+    html += `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">
+      <span>${e.icon}</span><span style="color:${e.color};font-size:0.85rem;">${e.msg}</span>
+      ${e.icon === '🫁' ? `<button type="button" class="btn-sm gold" style="margin-left:auto;" onclick="switchToRespiration()">Démarrer</button>` : ''}
+      ${e.icon === '💊' ? `<button type="button" class="btn-sm green" style="margin-left:auto;" onclick="toggleVitaminD()">💊 Prendre</button>` : ''}
+    </div>`;
+  });
+  cont.innerHTML = html;
+}
+
+function switchToRespiration() {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const tab = document.querySelector('.tab[data-page="respiration"]');
+  if (tab) tab.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+  const page = document.getElementById('page-respiration');
+  if (page) page.style.display = 'block';
+  currentPage = 'respiration';
+  renderRespiration();
+}
+
+// ============================================================
+// HYDRATATION
+// ============================================================
+const PASTEQUE_WATER_RATIO = 0.92;
+
+function getHydration(dateKey) {
+  return state.hydration[dateKey || todayKey()] || { water: 0, infusion: 0, pasteque: 0 };
+}
+
+function addHydration(kind, ml) {
+  const key = todayKey();
+  if (!state.hydration[key]) state.hydration[key] = { water: 0, infusion: 0, pasteque: 0 };
+  state.hydration[key][kind] = (state.hydration[key][kind] || 0) + ml;
+  saveState();
+  updateHydrationGauge();
+  showToast((kind === 'water' ? '💧' : '🍵') + ' +' + ml + ' ml');
+}
+
+function addPasteque() {
+  const input = document.getElementById('pastequeInput');
+  const grams = parseFloat(input.value);
+  if (!grams || grams <= 0) { showToast('⚠️ Indiquez une quantité de pastèque.'); return; }
+  const ml = Math.round(grams * PASTEQUE_WATER_RATIO);
+  addHydration('pasteque', ml);
+  input.value = '';
+}
+
+function updateHydrationGauge() {
+  const h = getHydration(todayKey());
+  const total = (h.water || 0) + (h.infusion || 0) + (h.pasteque || 0);
+  const pct = Math.min(100, (total / 2000) * 100);
+  const fill = document.getElementById('hydrationFill');
+  const current = document.getElementById('hydrationCurrent');
+  const detail = document.getElementById('hydrationDetail');
+  if (fill) fill.style.width = pct + '%';
+  if (current) current.textContent = total + ' ml';
+  if (detail) detail.textContent = `💧 Eau : ${h.water || 0} ml · 🍵 Infusion : ${h.infusion || 0} ml · 🍉 Pastèque : ${h.pasteque || 0} ml (équiv. eau)`;
+}
+
+// ============================================================
+// RESPIRATION
+// ============================================================
+const BREATH_PATTERNS = {
+  '478': { label: '4-7-8', phases: [{ name: 'Inspirez', sec: 4, scale: 1.3 }, { name: 'Retenez', sec: 7, scale: 1.3 }, { name: 'Expirez', sec: 8, scale: 0.8 }], totalSec: 4 * 60 },
+  'coherence': { label: 'Cohérence cardiaque', phases: [{ name: 'Inspirez', sec: 5, scale: 1.3 }, { name: 'Expirez', sec: 5, scale: 0.8 }], totalSec: 5 * 60 }
+};
+let breathMode = '478';
+let breathTimer = null;
+let breathElapsed = 0;
+let breathPhaseIdx = 0;
+let breathPhaseRemain = 0;
+
+function selectBreathMode(mode) {
+  if (breathTimer) return;
+  breathMode = mode;
+  document.getElementById('breathModeBtn478').className = mode === '478' ? 'btn-sm gold' : 'btn-sm slate';
+  document.getElementById('breathModeBtnCoherence').className = mode === 'coherence' ? 'btn-sm gold' : 'btn-sm slate';
+}
+
+function startBreathing() {
+  if (breathTimer) return;
+  breathElapsed = 0;
+  breathPhaseIdx = 0;
+  const pattern = BREATH_PATTERNS[breathMode];
+  breathPhaseRemain = pattern.phases[0].sec;
+  document.getElementById('breathStartBtn').style.display = 'none';
+  document.getElementById('breathStopBtn').style.display = 'inline-block';
+  applyBreathPhase();
+  breathTimer = setInterval(breathTick, 1000);
+}
+
+function applyBreathPhase() {
+  const pattern = BREATH_PATTERNS[breathMode];
+  const phase = pattern.phases[breathPhaseIdx];
+  const circle = document.getElementById('breathCircle');
+  const label = document.getElementById('breathPhaseLabel');
+  if (circle) circle.style.transform = `scale(${phase.scale})`;
+  if (label) label.textContent = phase.name;
+}
+
+function breathTick() {
+  const pattern = BREATH_PATTERNS[breathMode];
+  breathElapsed++;
+  breathPhaseRemain--;
+  const countdown = document.getElementById('breathCountdown');
+  if (countdown) countdown.textContent = breathPhaseRemain + ' s';
+  if (breathPhaseRemain <= 0) {
+    breathPhaseIdx = (breathPhaseIdx + 1) % pattern.phases.length;
+    breathPhaseRemain = pattern.phases[breathPhaseIdx].sec;
+    applyBreathPhase();
+  }
+  if (breathElapsed >= pattern.totalSec) {
+    stopBreathing(true);
+  }
+}
+
+function stopBreathing(completed) {
+  if (breathTimer) { clearInterval(breathTimer); breathTimer = null; }
+  document.getElementById('breathStartBtn').style.display = 'inline-block';
+  document.getElementById('breathStopBtn').style.display = 'none';
+  const circle = document.getElementById('breathCircle');
+  const label = document.getElementById('breathPhaseLabel');
+  const countdown = document.getElementById('breathCountdown');
+  if (circle) circle.style.transform = 'scale(1)';
+  if (label) label.textContent = completed ? 'Terminé ✅' : 'Prêt';
+  if (countdown) countdown.textContent = '—';
+  if (breathElapsed >= 30) {
+    state.breathingSessions.push({ date: todayKey(), type: BREATH_PATTERNS[breathMode].label, durationSec: breathElapsed });
+    saveState();
+    showToast(completed ? '🫁 Séance terminée' : '🫁 Séance enregistrée (' + breathElapsed + 's)');
+    renderBreathHistory();
+  }
+  breathElapsed = 0;
+}
+
+function renderBreathHistory() {
+  const cont = document.getElementById('breathHistory');
+  if (!cont) return;
+  const sessions = [...state.breathingSessions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15);
+  if (sessions.length === 0) {
+    cont.textContent = 'Aucune séance enregistrée.';
+    return;
+  }
+  cont.innerHTML = sessions.map(s => {
+    const log = state.logs.find(l => l.date === s.date);
+    const diaInfo = log && log.dia ? ` · DIA : ${log.dia}` : '';
+    return `<div style="padding:4px 0;border-bottom:1px solid var(--line);">${s.date} — ${s.type} (${s.durationSec}s)${diaInfo}</div>`;
+  }).join('');
+}
+
+function renderRespiration() {
+  selectBreathMode(breathMode);
+  renderBreathHistory();
+}
+
+// ============================================================
+// NAVIGATION, RENDUS, GRAPHIQUES, SUIVI, INIT
+// ============================================================
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', function(e) {
+    const page = this.dataset.page;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    this.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.style.display='none');
+    const el = document.getElementById('page-'+page);
+    if (el) el.style.display = 'block';
+    currentPage = page;
+    if (page === 'dashboard') selectedDayId = isoWeekdayToDayId();
+    if (page === 'nutrition') renderNutrition();
+    if (page === 'recettes') renderRecipes();
+    if (page === 'respiration') renderRespiration();
+    if (page === 'cycle') renderCycle();
+    if (page === 'suivi') renderSuivi();
+    if (page === 'profil' && typeof renderProfile === 'function') renderProfile();
+    if (page === 'dashboard') renderDashboard();
+    e.preventDefault();
+  });
+});
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    state.dayMode = this.dataset.mode;
+    saveState();
+    document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode === state.dayMode));
+    renderAll();
+  });
+});
+document.querySelectorAll('[data-program]').forEach(btn => {
+  btn.addEventListener('click', function() {
+    state.program = this.dataset.program === 'upper_focus' ? 'upper_focus' : 'balanced';
+    saveState();
+    document.querySelectorAll('[data-program]').forEach(b=>b.classList.toggle('active', b.dataset.program === state.program));
+    renderAll();
+  });
+});
+
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
+function normalizeFoodName(str) {
+  return String(str).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function matchFoodDb(mealFoodName) {
+  const target = normalizeFoodName(mealFoodName);
+  if (!target) return null;
+  return FOOD_DB.find(f => {
+    const fn = normalizeFoodName(f.name);
+    return fn && (target.includes(fn) || fn.includes(target));
+  }) || null;
+}
+
+function findFood(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  return FOOD_DB.find(f => f.name.toLowerCase() === q) ||
+         FOOD_DB.find(f => f.name.toLowerCase().includes(q));
+}
+
+function getRecipes() {
+  return FOOD_DB.filter(f => f.type === "recette");
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function todayKey() { return new Date().toISOString().slice(0,10); }
+function isoWeekdayToDayId() { const d = new Date().getDay(); return d === 0 ? 7 : d; }
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString('fr-FR', { weekday:'short', day:'2-digit', month:'2-digit' });
+}
+function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function addDaysToKey(dateKey, delta) {
+  const d = new Date(dateKey + "T00:00:00");
+  d.setDate(d.getDate() + delta);
+  return d.toISOString().slice(0,10);
+}
+
+let selectedDayId = isoWeekdayToDayId();
+let currentPage = 'dashboard';
+let extrasViewDate = todayKey();
+
+// ============================================================
+// FONCTIONS CŒUR
+// ============================================================
+function getTotals(dayId) {
+  const day = getDay(dayId);
+  if (!day) return {cal:0,p:0,c:0,f:0,k:0};
+  const eatenObj = (state.mealsEaten[state.dayMode] && state.mealsEaten[state.dayMode][dayId]) || {};
+  let cal=0,p=0,c=0,f=0,k=0;
+  day.meals.forEach((meal, idx) => { 
+    if(eatenObj[idx]) { 
+      const m = getEffectiveMealMacros(dayId, idx, meal);
+      cal += m.cal;
+      p += m.p;
+      c += m.c;
+      f += m.f;
+      k += m.k;
+    } 
+  });
+  if (dayId === isoWeekdayToDayId()) {
+    const extras = state.extras[todayKey()] || [];
+    extras.forEach(ex => { 
+      cal += ex.kcal || 0; 
+      p += ex.p || 0; 
+      c += ex.c || 0; 
+      f += ex.f || 0;
+      k += ex.potassium || 0;
+    });
+  }
+  return {cal, p, c, f, k: Math.round(k)};
+}
+
+function toggleMeal(idx) {
+  if (!state.mealsEaten[state.dayMode]) state.mealsEaten[state.dayMode] = {};
+  if (!state.mealsEaten[state.dayMode][selectedDayId]) state.mealsEaten[state.dayMode][selectedDayId] = {};
+  state.mealsEaten[state.dayMode][selectedDayId][idx] = !state.mealsEaten[state.dayMode][selectedDayId][idx];
+  saveState();
+  renderNutrition();
+  renderDashboardStats();
+  updatePotassiumGauge();
+}
+
+function resetWeek() {
+  const days = getDays();
+  let count = 0;
+  const phaseObj = state.mealsEaten[state.dayMode] || {};
+  days.forEach(d => {
+    if (phaseObj[d.id]) {
+      Object.keys(phaseObj[d.id]).forEach(k => {
+        if (phaseObj[d.id][k]) count++;
+        phaseObj[d.id][k] = false;
+      });
+    }
+  });
+  saveState();
+  renderNutrition();
+  renderDashboard();
+  showToast(`🔄 ${count} repas réinitialisés`);
+}
+
+function toggleChecklist(idx, event) {
+  if (event) event.stopPropagation();
+  const key = todayKey();
+  if (!state.checklist[key]) state.checklist[key] = {};
+  state.checklist[key][idx] = !state.checklist[key][idx];
+  saveState();
+  renderChecklist();
+}
+
+function toggleSession(weekKey, day, checkbox) {
+  if (!state.cycleDone[weekKey]) state.cycleDone[weekKey] = {};
+  state.cycleDone[weekKey][day] = checkbox.checked;
+  saveState();
+  updateWeekStatus(weekKey);
+}
+
+function updateWeekStatus(weekKey) {
+  const details = document.querySelector(`#cycleContainer details:has([data-week="${weekKey}"])`);
+  if (!details) return;
+  const summary = details.querySelector('summary');
+  if (!summary) return;
+  const doneObj = state.cycleDone[weekKey] || {};
+  const totalDays = 7;
+  const doneCount = DAY_KEYS.filter(d => doneObj[d] === true).length;
+  const isComplete = doneCount === totalDays;
+  const statusSpan = summary.querySelector('span:last-child');
+  if (statusSpan) {
+    statusSpan.textContent = isComplete ? '✅ Complète' : `${doneCount}/${totalDays}`;
+    statusSpan.style.color = isComplete ? 'var(--good-text)' : 'var(--ink-mute)';
+  }
+}
+
+// ============================================================
+// AJOUT ALIMENTS
+// ============================================================
+function populateFoodList() {
+  const datalist = document.getElementById('foodList');
+  if (!datalist) return;
+  datalist.innerHTML = '';
+  FOOD_DB.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f.name + (f.forbidden ? ' · à limiter' : '');
+    datalist.appendChild(opt);
+  });
+}
+
+function setExtrasViewDate(dateKey) {
+  if (!dateKey) return;
+  extrasViewDate = dateKey;
+  const dateInput = document.getElementById('extraDate');
+  if (dateInput) dateInput.value = extrasViewDate;
+  renderNutrition();
+}
+
+function addExtraFood() {
+  const input = document.getElementById('foodSearch');
+  const qtyInput = document.getElementById('foodQuantity');
+  const name = input.value.trim();
+  const qty = parseFloat(qtyInput.value) || 0;
+
+  if (!name) { showToast("Saisissez un aliment."); return; }
+  if (qty < 5) { showToast("Min 5g."); return; }
+
+  const food = findFood(name);
+  if (!food) { showToast("Aliment non trouvé."); return; }
+
+  const alertDiv = document.getElementById('forbiddenAlert');
+  if (food.forbidden) {
+    alertDiv.style.display = 'block';
+    alertDiv.textContent = `🧂 À limiter : ${food.name} est riche en sodium (${food.sodium} mg/100 g).`;
+    alertDiv.style.color = 'var(--danger-text)';
+    return;
+  } else {
+    alertDiv.style.display = 'none';
+  }
+
+  const factor = qty / 100;
+  const key = extrasViewDate;
+  if (!state.extras[key]) state.extras[key] = [];
+  state.extras[key].push({
+    name: food.name,
+    quantity: qty,
+    kcal: Math.round(food.kcal * factor),
+    p: Math.round((food.p * factor) * 10) / 10,
+    c: Math.round((food.c * factor) * 10) / 10,
+    f: Math.round((food.f * factor) * 10) / 10,
+    type: food.type,
+    potassium: food.potassium ? Math.round(food.potassium * factor) : 0,
+    sodium: food.sodium ? Math.round(food.sodium * factor) : 0
+  });
+  saveState();
+  input.value = '';
+  qtyInput.value = '100';
+  renderNutrition();
+  renderDashboard();
+}
+
+function removeExtraFood(dateKey, index) {
+  if (state.extras[dateKey]) {
+    state.extras[dateKey].splice(index, 1);
+    if (state.extras[dateKey].length === 0) delete state.extras[dateKey];
+    saveState();
+    renderNutrition();
+    renderDashboard();
+  }
+}
+
+// ============================================================
+// RECETTES
+// ============================================================
+let recipeIngredients = [];
+
+function addIngredientToRecipe() {
+  const search = document.getElementById('recipeIngredientSearch');
+  const qtyInput = document.getElementById('recipeIngredientQty');
+  const name = search.value.trim();
+  const qty = parseFloat(qtyInput.value) || 0;
+  if (!name || qty < 5) { showToast("Ingrédient valide (min 5g)"); return; }
+  const food = findFood(name);
+  if (!food) { showToast("Aliment non trouvé."); return; }
+  recipeIngredients.push({ name: food.name, quantity: qty });
+  renderRecipeIngredients();
+  updateRecipePreview();
+  search.value = '';
+  qtyInput.value = '100';
+}
+
+function renderRecipeIngredients() {
+  const container = document.getElementById('recipeIngredientList');
+  if (!container) return;
+  container.innerHTML = '';
+  recipeIngredients.forEach((ing, idx) => {
+    const tag = document.createElement('span');
+    tag.className = 'food-tag';
+    tag.innerHTML = `${escapeHtml(ing.name)} ${ing.quantity}g <span class="remove" onclick="removeRecipeIngredient(${idx})">✕</span>`;
+    container.appendChild(tag);
+  });
+}
+
+function removeRecipeIngredient(idx) {
+  recipeIngredients.splice(idx, 1);
+  renderRecipeIngredients();
+  updateRecipePreview();
+}
+
+function updateRecipePreview() {
+  const container = document.getElementById('recipeMacroPreview');
+  if (!container) return;
+  if (recipeIngredients.length === 0) {
+    container.textContent = 'Ajoutez des ingrédients pour voir les macros.';
+    return;
+  }
+  let total = { kcal: 0, p: 0, c: 0, f: 0, k: 0, na: 0 };
+  recipeIngredients.forEach(ing => {
+    const food = FOOD_DB.find(f => f.name === ing.name);
+    if (food) {
+      const factor = ing.quantity / 100;
+      total.kcal += food.kcal * factor;
+      total.p += food.p * factor;
+      total.c += food.c * factor;
+      total.f += food.f * factor;
+      total.k += (food.potassium || 0) * factor;
+      total.na += (food.sodium || 0) * factor;
+    }
+  });
+  container.innerHTML = `
+    <strong>Aperçu :</strong> 
+    ${Math.round(total.kcal)} kcal · 
+    P${total.p.toFixed(1)}g · G${total.c.toFixed(1)}g · L${total.f.toFixed(1)}g · K${Math.round(total.k)}mg · Na${Math.round(total.na)}mg
+  `;
+}
+
+function saveRecipe() {
+  const nameInput = document.getElementById('recipeNameInput');
+  const tagSelect = document.getElementById('recipeTagSelect');
+  const name = nameInput.value.trim();
+  const tag = tagSelect.value;
+  if (!name) { showToast("Donnez un nom."); return; }
+  if (recipeIngredients.length === 0) { showToast("Ajoutez au moins un ingrédient."); return; }
+  
+  let total = { kcal: 0, p: 0, c: 0, f: 0, k: 0, na: 0 };
+  recipeIngredients.forEach(ing => {
+    const food = FOOD_DB.find(f => f.name === ing.name);
+    if (food) {
+      const factor = ing.quantity / 100;
+      total.kcal += food.kcal * factor;
+      total.p += food.p * factor;
+      total.c += food.c * factor;
+      total.f += food.f * factor;
+      total.k += (food.potassium || 0) * factor;
+      total.na += (food.sodium || 0) * factor;
+    }
+  });
+  
+  const recipe = {
+    name: name + " (recette)",
+    kcal: Math.round(total.kcal),
+    p: Math.round(total.p * 10) / 10,
+    c: Math.round(total.c * 10) / 10,
+    f: Math.round(total.f * 10) / 10,
+    type: "recette",
+    potassium: Math.round(total.k),
+    sodium: Math.round(total.na),
+    forbidden: false,
+    tags: [tag],
+    ingredients: recipeIngredients.map(ing => ({ ...ing })),
+    isCustom: true
+  };
+  
+  FOOD_DB.push(recipe);
+  state.recipes.push(recipe);
+  saveState();
+  
+  recipeIngredients = [];
+  renderRecipeIngredients();
+  updateRecipePreview();
+  nameInput.value = '';
+  document.getElementById('recipeIngredientSearch').value = '';
+  document.getElementById('recipeIngredientQty').value = '100';
+  
+  populateFoodList();
+  renderRecipes();
+  renderQuickRecipeButtons();
+  showToast(`🍹 "${name}" enregistrée !`);
+}
+
+function clearRecipeForm() {
+  recipeIngredients = [];
+  renderRecipeIngredients();
+  updateRecipePreview();
+  document.getElementById('recipeNameInput').value = '';
+  document.getElementById('recipeIngredientSearch').value = '';
+  document.getElementById('recipeIngredientQty').value = '100';
+}
+
+function deleteRecipe(index) {
+  const recipe = state.recipes[index];
+  if (!recipe) return;
+  if (!confirm(`Supprimer "${recipe.name}" ?`)) return;
+  const dbIndex = FOOD_DB.findIndex(f => f.name === recipe.name && f.isCustom === true);
+  if (dbIndex !== -1) FOOD_DB.splice(dbIndex, 1);
+  state.recipes.splice(index, 1);
+  saveState();
+  populateFoodList();
+  renderRecipes();
+  renderQuickRecipeButtons();
+  showToast(`🗑️ Recette supprimée`);
+}
+
+function addRecipeToDay(recipeName) {
+  const recipe = FOOD_DB.find(f => f.name === recipeName && f.type === "recette");
+  if (!recipe) { showToast("Recette non trouvée."); return; }
+  const key = extrasViewDate;
+  if (!state.extras[key]) state.extras[key] = [];
+  state.extras[key].push({
+    name: recipe.name,
+    quantity: 1,
+    kcal: recipe.kcal,
+    p: recipe.p,
+    c: recipe.c,
+    f: recipe.f,
+    potassium: recipe.potassium || 0,
+    sodium: recipe.sodium || 0,
+    isRecipe: true,
+    tags: recipe.tags || []
+  });
+  saveState();
+  renderNutrition();
+  renderDashboard();
+  showToast(`🍹 ${recipeName} ajouté(e)`);
+}
+
+// ============================================================
+// RENDU DASHBOARD
+// ============================================================
+function renderDashboardStats() {
+  const day = getDay(selectedDayId);
+  if (!day) return;
+  const subEl = document.getElementById('headerSub');
+  if (subEl) subEl.textContent = `V5.7 · ${getProgramConfig().label} · ${day.name} · ${day.session} · ${isTrainingLocked() ? '🔒 Prudence' : '🔓 Ouvert'}`;
+  const dashDay = document.getElementById('dashDay');
+  if (dashDay) dashDay.textContent = day.name;
+  const dashSession = document.getElementById('dashSession');
+  if (dashSession) dashSession.textContent = day.session + (isTrainingLocked() ? ' ⛔' : '');
+  const eaten = getTotals(selectedDayId);
+  const kcalEl = document.getElementById('dashKcal');
+  if (kcalEl) kcalEl.textContent = eaten.cal + " / " + day.totals.calories + " kcal";
+  const pEl = document.getElementById('dashP');
+  if (pEl) pEl.textContent = eaten.p + " / " + day.totals.protein + "g";
+  const cEl = document.getElementById('dashC');
+  if (cEl) cEl.textContent = eaten.c + "g";
+  const fEl = document.getElementById('dashF');
+  if (fEl) fEl.textContent = eaten.f + "g";
+  const kEl = document.getElementById('dashK');
+  if (kEl) kEl.textContent = eaten.k + "mg";
+  const pctEl = document.getElementById('dashPct');
+  if (pctEl) {
+    const pct = Math.min(100, Math.round((eaten.cal / day.totals.calories) * 100));
+    pctEl.textContent = pct + "%";
+  }
+}
+
+function renderChecklist() {
+  const clObj = state.checklist[todayKey()] || {};
+  const cont = document.getElementById('dashChecklist');
+  if (!cont) return;
+  cont.innerHTML = '';
+  const items = ["💧 Boire 2L","🥩 Protéines OK","⚖️ Peser","🏋️ Séance","😴 Dormir"];
+  let done = 0;
+  const frag = document.createDocumentFragment();
+  items.forEach((item, idx) => {
+    if (clObj[idx]) done++;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 0;min-height:40px;border-bottom:1px solid var(--line);cursor:pointer;';
+    row.setAttribute('role', 'checkbox');
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('aria-checked', clObj[idx] ? 'true' : 'false');
+    const box = document.createElement('div');
+    box.style.cssText = 'width:26px;height:26px;flex:0 0 auto;border-radius:6px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;';
+    if (clObj[idx]) {
+      box.style.background = 'var(--gold-text)';
+      box.textContent = '✓';
+    } else {
+      box.style.background = 'transparent';
+    }
+    const label = document.createElement('div');
+    label.style.cssText = 'flex:1;font-size:0.85rem;';
+    if (clObj[idx]) {
+      label.style.textDecoration = 'line-through';
+      label.style.color = 'var(--ink-mute)';
+    }
+    label.textContent = item;
+    row.appendChild(box);
+    row.appendChild(label);
+    row.addEventListener('click', (e) => toggleChecklist(idx, e));
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleChecklist(idx, e); }
+    });
+    frag.appendChild(row);
+  });
+  const count = document.createElement('div');
+  count.style.cssText = 'font-size:0.7rem;color:var(--ink-mute);margin-top:4px;';
+  count.textContent = done + '/' + items.length;
+  frag.appendChild(count);
+  cont.appendChild(frag);
+}
+
+function renderDashboard() {
+  renderDashboardStats();
+  renderChecklist();
+  updateStatus();
+  updatePotassiumGauge();
+  renderDailyStateForm();
+  renderAdaptiveRecommendation();
+  updateHydrationGauge();
+  updateVitaminDDisplay();
+  if (typeof renderMuscleDashboard === 'function') renderMuscleDashboard();
+  if (typeof renderProfileRepereCard === 'function') renderProfileRepereCard();
+}
+
+// ============================================================
+// RENDU NUTRITION
+// ============================================================
+function renderNutrition() {
+  const days = getDays();
+  const container = document.getElementById('dayTabs');
+  if (!container) return;
+  container.innerHTML = '';
+  days.forEach(d => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (d.id===selectedDayId ? ' active' : '');
+    btn.textContent = d.short;
+    btn.style.padding = '4px 10px';
+    btn.style.fontSize = '11px';
+    btn.onclick = function(e) {
+      selectedDayId = d.id;
+      renderNutrition();
+      renderDashboard();
+      e.preventDefault();
+    };
+    container.appendChild(btn);
+  });
+
+  const day = getDay(selectedDayId);
+  if (!day) return;
+  const titleEl = document.getElementById('nutDayTitle');
+  if (titleEl) titleEl.textContent = day.name + " — " + day.session;
+  const kcalEl = document.getElementById('nutDayKcal');
+  if (kcalEl) kcalEl.textContent = day.totals.calories + " kcal";
+  const eaten = getTotals(selectedDayId);
+  const eatenEl = document.getElementById('nutEaten');
+  if (eatenEl) eatenEl.textContent = eaten.cal;
+  const targetEl = document.getElementById('nutTarget');
+  if (targetEl) targetEl.textContent = day.totals.calories;
+  const pEl = document.getElementById('nutP');
+  if (pEl) pEl.textContent = eaten.p + " / " + day.totals.protein + "g";
+  const proteinRule = document.getElementById('nutritionProteinRule');
+  if (proteinRule) proteinRule.textContent = `${day.totals.protein} g/j (≈ 1,8 g/kg)`;
+  const cEl = document.getElementById('nutC');
+  if (cEl) cEl.textContent = eaten.c;
+  const fEl = document.getElementById('nutF');
+  if (fEl) fEl.textContent = eaten.f;
+  const kEl = document.getElementById('nutK');
+  if (kEl) kEl.textContent = eaten.k + "mg";
+  const barEl = document.getElementById('nutBar');
+  if (barEl) {
+    const pct = Math.min(100, Math.round((eaten.cal / day.totals.calories) * 100));
+    barEl.style.width = pct + "%";
+  }
+
+  const potassium = getPotassiumTotals(selectedDayId);
+  const potassiumTarget = Math.max(1, Number(state?.profile?.potassiumTarget) || 3500);
+  const kDisplay = document.getElementById('potassiumDisplay');
+  if (kDisplay) {
+    kDisplay.textContent = `🥑 Potassium : ${potassium} mg / ${potassiumTarget} mg`;
+    kDisplay.style.color = potassium >= potassiumTarget ? 'var(--green-text)' : 'var(--orange-text)';
+  }
+
+  const nutExtrasNote = document.getElementById('nutExtrasNote');
+  if (nutExtrasNote) {
+    nutExtrasNote.textContent = (selectedDayId !== isoWeekdayToDayId())
+      ? "ℹ️ Onglet différent d'aujourd'hui."
+      : '';
+  }
+
+  const list = document.getElementById('mealsContainer');
+  if (!list) return;
+  list.innerHTML = '';
+  const eatenObj = (state.mealsEaten[state.dayMode] && state.mealsEaten[state.dayMode][selectedDayId]) || {};
+  day.meals.forEach((meal, idx) => {
+    const isDone = !!eatenObj[idx];
+    const replName = (state.mealReplacements[state.dayMode] && state.mealReplacements[state.dayMode][selectedDayId] && state.mealReplacements[state.dayMode][selectedDayId][idx]) || null;
+    const recipe = replName ? FOOD_DB.find(f => f.name === replName && f.type === 'recette') : null;
+    const el = document.createElement('div');
+    el.className = 'meal-item' + (isDone ? ' done' : '');
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('aria-pressed', isDone ? 'true' : 'false');
+    const recipeOptions = getRecipes().map(r =>
+      `<option value="${escapeHtml(r.name)}"${r.name === replName ? ' selected' : ''}>${escapeHtml(r.name)}</option>`
+    ).join('');
+    if (recipe) {
+      el.innerHTML = `
+        <div class="head">
+          <div><strong>🔄 ${escapeHtml(recipe.name)}</strong> ${meal.time ? `<span class="time">(${escapeHtml(meal.time)})</span>` : ''}<div style="font-size:0.7rem;color:var(--ink-mute);">remplace : ${escapeHtml(meal.name)}</div></div>
+          <div class="check ${isDone?'done':''}">${isDone?'✓':''}</div>
+        </div>
+        <div style="font-size:0.7rem;color:var(--ink-mute);margin-top:4px;">${recipe.kcal} kcal · P${recipe.p}g · G${recipe.c}g · L${recipe.f}g · K${recipe.potassium || 0}mg</div>
+        <div class="meal-replace-row" style="margin-top:8px;">
+          <label style="font-size:0.7rem;color:var(--ink-mute);">Remplacer :</label>
+          <select class="meal-replace-select" style="width:100%;margin-top:4px;background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:16px;color:var(--ink);min-height:40px;">
+            <option value="">— Repas prévu</option>
+            ${recipeOptions}
+          </select>
+        </div>
+      `;
+    } else {
+      el.innerHTML = `
+        <div class="head">
+          <div><strong>${escapeHtml(meal.name)}</strong> ${meal.time ? `<span class="time">(${escapeHtml(meal.time)})</span>` : ''}</div>
+          <div class="check ${isDone?'done':''}">${isDone?'✓':''}</div>
+        </div>
+        <ul style="list-style:none;padding:0;margin:6px 0;font-size:0.8rem;color:var(--ink-mute);">
+          ${meal.foods.map(([n,q]) => `<li style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed var(--line);"><span>${escapeHtml(n)}</span><span>${escapeHtml(q)}</span></li>`).join('')}
+        </ul>
+        <div style="font-size:0.7rem;color:var(--ink-mute);">${meal.m.calories} kcal · P${meal.m.protein}g · G${meal.m.carbs}g · L${meal.m.fat}g</div>
+        <div class="meal-replace-row" style="margin-top:8px;">
+          <label style="font-size:0.7rem;color:var(--ink-mute);">Remplacer :</label>
+          <select class="meal-replace-select" style="width:100%;margin-top:4px;background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:16px;color:var(--ink);min-height:40px;">
+            <option value="">— Repas prévu</option>
+            ${recipeOptions}
+          </select>
+        </div>
+      `;
+    }
+    el.addEventListener('click', () => toggleMeal(idx));
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleMeal(idx); }
+    });
+    const select = el.querySelector('.meal-replace-select');
+    if (select) {
+      select.addEventListener('click', (e) => e.stopPropagation());
+      select.addEventListener('change', (e) => {
+        e.stopPropagation();
+        if (!state.mealReplacements[state.dayMode]) state.mealReplacements[state.dayMode] = {};
+        if (!state.mealReplacements[state.dayMode][selectedDayId]) state.mealReplacements[state.dayMode][selectedDayId] = {};
+        state.mealReplacements[state.dayMode][selectedDayId][idx] = e.target.value || null;
+        saveState();
+        renderNutrition();
+        renderDashboard();
+      });
+    }
+    list.appendChild(el);
+  });
+
+  const dateInput = document.getElementById('extraDate');
+  if (dateInput && dateInput.value !== extrasViewDate) dateInput.value = extrasViewDate;
+  const labelEl = document.getElementById('extraDateLabel');
+  if (labelEl) {
+    labelEl.textContent = extrasViewDate === todayKey() ? "Aujourd'hui" : fmtDate(extrasViewDate);
+  }
+
+  const extrasForDate = state.extras[extrasViewDate] || [];
+  const extraDiv = document.getElementById('extraFoodsList');
+  if (!extraDiv) return;
+  extraDiv.innerHTML = '';
+  if (extrasForDate.length > 0) {
+    extrasForDate.forEach((ex, idx) => {
+      const food = FOOD_DB.find(f => f.name === ex.name);
+      const isForbidden = food && food.forbidden;
+      const isRecipe = ex.isRecipe || (food && food.type === 'recette');
+      const tag = document.createElement('span');
+      tag.className = 'food-tag' + (isForbidden ? ' forbidden' : '') + (isRecipe ? ' recipe' : '');
+      tag.innerHTML = `${escapeHtml(ex.name)} ${ex.quantity}g (${ex.kcal} kcal, P${ex.p}g, G${ex.c}g, L${ex.f}g${ex.potassium ? `, K${ex.potassium}mg` : ''}${ex.sodium ? `, Na${ex.sodium}mg` : ''}) <span class="remove" onclick="removeExtraFood('${extrasViewDate}', ${idx})">✕</span>`;
+      extraDiv.appendChild(tag);
+    });
+  } else {
+    extraDiv.innerHTML = '<span style="color:var(--ink-mute);font-size:0.8rem;">Aucun ajout pour cette date.</span>';
+  }
+
+  const extraTotals = extrasForDate.reduce((acc, ex) => {
+    acc.cal += ex.kcal; acc.p += ex.p; acc.c += ex.c; acc.f += ex.f; acc.k += ex.potassium || 0; acc.na += ex.sodium || 0;
+    return acc;
+  }, {cal:0, p:0, c:0, f:0, k:0, na:0});
+  const totalDiv = document.getElementById('extraDayTotal');
+  if (totalDiv) {
+    totalDiv.textContent = extrasForDate.length > 0
+      ? `Total ajouts : ${extraTotals.cal} kcal · P${Math.round(extraTotals.p*10)/10}g · G${Math.round(extraTotals.c*10)/10}g · L${Math.round(extraTotals.f*10)/10}g · K${extraTotals.k}mg · Na${extraTotals.na}mg`
+      : '';
+  }
+
+  const alertDiv = document.getElementById('forbiddenAlert');
+  if (alertDiv) alertDiv.style.display = 'none';
+  
+  renderQuickRecipeButtons();
+  updateVitaminDDisplay();
+}
+
+// ============================================================
+// RENDU RECETTES
+// ============================================================
+function renderRecipes() {
+  const container = document.getElementById('recipeList');
+  if (!container) return;
+  const allRecipes = getRecipes();
+  const customRecipes = state.recipes || [];
+  if (allRecipes.length === 0 && customRecipes.length === 0) {
+    container.innerHTML = '<div style="color:var(--ink-mute);font-size:0.85rem;">Aucune recette enregistrée.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  const predefined = allRecipes.filter(r => !r.isCustom);
+  predefined.forEach((recipe) => {
+    container.appendChild(createRecipeCard(recipe, null, false));
+  });
+  customRecipes.forEach((recipe, idx) => {
+    container.appendChild(createRecipeCard(recipe, idx, true));
+  });
+}
+
+function createRecipeCard(recipe, idx, isCustom) {
+  const div = document.createElement('div');
+  div.className = 'recipe-card';
+  const tags = (recipe.tags || []).map(t => {
+    const cls = t === 'post-workout' ? 'postworkout' : 
+                t === 'smoothie' ? 'smoothie' : 
+                t === 'proteine' ? 'proteine' : 
+                t === 'recup' ? 'recup' : '';
+    return `<span class="badge ${cls}">${t}</span>`;
+  }).join(' ');
+  const ingredientList = recipe.ingredients ? 
+    recipe.ingredients.map(i => `${i.name} (${i.quantity}g)`).join(', ') : 
+    '—';
+  div.innerHTML = `
+    <div class="info">
+      <strong>${escapeHtml(recipe.name)}</strong>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px;">${tags}</div>
+      <div class="sub">${recipe.kcal} kcal · P${recipe.p}g · G${recipe.c}g · L${recipe.f}g · K${recipe.potassium || 0}mg</div>
+      <div class="sub" style="font-size:0.65rem;color:var(--ink-mute);">${ingredientList}</div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn-sm gold add-recipe-btn">➕ Ajouter</button>
+      ${isCustom ? `<button type="button" class="btn-sm danger" onclick="deleteRecipe(${idx})">🗑️</button>` : ''}
+    </div>
+  `;
+  const addBtn = div.querySelector('.add-recipe-btn');
+  if (addBtn) addBtn.addEventListener('click', () => addRecipeToDay(recipe.name));
+  return div;
+}
+
+function renderQuickRecipeButtons() {
+  const container = document.getElementById('quickRecipeButtons');
+  if (!container) return;
+  const recipes = getRecipes();
+  if (recipes.length === 0) {
+    container.innerHTML = '<span style="font-size:0.75rem;color:var(--ink-mute);">Créez une recette.</span>';
+    return;
+  }
+  container.innerHTML = '';
+  recipes.forEach(recipe => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-sm gold';
+    btn.textContent = `🍹 ${recipe.name.replace(' (recette)', '')}`;
+    btn.style.fontSize = '0.7rem';
+    btn.onclick = () => addRecipeToDay(recipe.name);
+    container.appendChild(btn);
+  });
+}
+
+// ============================================================
+// CYCLE (avec éditeur de charges ET progression intelligente)
+// ============================================================
+const DAY_KEYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const DAY_ICONS = ['🏋️', '🦵', '🧘', '💪', '🔥', '🚵', '🛌'];
+
+// La progression est gérée par un moteur unique V5.7 (voir fin du fichier).
+
+// Fonction appelée depuis l'UI pour enregistrer la performance
+function savePerformanceFromUI(weekNum, dayKey, exoName) {
+  // Trouver les selects correspondants dans le DOM
+  const container = document.querySelector(`#cycleContainer details:has([data-week="${weekNum}"])`);
+  if (!container) {
+    showToast('⚠️ Élément non trouvé.');
+    return;
+  }
+  const rirSelect = container.querySelector(`.rir-select[data-week="${weekNum}"][data-day="${dayKey}"][data-exo="${exoName}"]`);
+  const qualitySelect = container.querySelector(`.quality-select[data-week="${weekNum}"][data-day="${dayKey}"][data-exo="${exoName}"]`);
+  const painSelect = container.querySelector(`.pain-select[data-week="${weekNum}"][data-day="${dayKey}"][data-exo="${exoName}"]`);
+  const techniqueSelect = container.querySelector(`.technique-select[data-week="${weekNum}"][data-day="${dayKey}"][data-exo="${exoName}"]`);
+  const repsInput = container.querySelector(`.reps-input[data-week="${weekNum}"][data-day="${dayKey}"][data-exo="${exoName}"]`);
+  if (!rirSelect || !qualitySelect) {
+    showToast('⚠️ Sélecteurs non trouvés.');
+    return;
+  }
+  const rir = rirSelect.value;
+  const quality = qualitySelect.value;
+  if (!rir || !quality) {
+    showToast('⚠️ Veuillez sélectionner RIR et Qualité.');
+    return;
+  }
+  savePerformance(weekNum, dayKey, exoName, rir, quality, +(painSelect?.value||0), techniqueSelect?.value||'bonne', repsInput?.value === '' ? null : +(repsInput?.value||0));
+  // Mettre à jour l'affichage du bouton pour indiquer succès
+  const btn = container.querySelector(`.perf-btn[data-week="${weekNum}"][data-day="${dayKey}"][data-exo="${exoName}"]`);
+  if (btn) {
+    btn.textContent = '✅';
+    btn.style.background = 'var(--green)';
+    setTimeout(() => {
+      btn.textContent = '✅';
+      btn.style.background = 'var(--gold)';
+    }, 2000);
+  }
+}
+
+// Fonction renderCycle (avec performances)
+function renderCycle() {
+  const container = document.getElementById('cycleContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  const locked = isTrainingLocked();
+  const programLabel = document.getElementById('cycleProgramLabel');
+  if (programLabel) programLabel.textContent = getProgramConfig().label;
+  const isVacances = state.dayMode === 'vacances';
+  const isRecup = state.dayMode === 'recuperation';
+  const badge = document.getElementById('cycleLockBadge');
+  if (badge) {
+    if (isRecup) {
+      badge.textContent = '🧘 MODE RÉCUPÉRATION';
+      badge.style.color = 'var(--green-text)';
+    } else if (isVacances) {
+      badge.textContent = '🏖️ MODE VACANCES';
+      badge.style.color = 'var(--orange-text)';
+    } else if (locked) {
+      badge.textContent = '🔒 EFFORT INTENSE VERROUILLÉ';
+      badge.style.color = 'var(--red-text)';
+    } else {
+      badge.textContent = '🔓 DÉVERROUILLÉ';
+      badge.style.color = 'var(--green-text)';
+    }
+  }
+  
+  const weeks = getCycleWeeks();
+  weeks.forEach((w) => {
+    const weekNum = w.week;
+    const details = document.createElement('details');
+    const doneKey = `${state.program}::${state.dayMode}_week_${weekNum}`;
+    const doneObj = state.cycleDone[doneKey] || {};
+    const totalDays = 7;
+    const doneCount = DAY_KEYS.filter(d => doneObj[d] === true).length;
+    const isComplete = doneCount === totalDays;
+
+    const summary = document.createElement('summary');
+    summary.style.cssText = 'padding:8px 12px;font-weight:700;font-size:0.9rem;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;background:var(--slate-light);border-bottom:1px solid var(--line);';
+    summary.innerHTML = `
+      <span>Semaine ${weekNum} ${locked ? '🔒' : ''}${isVacances ? '🏖️' : ''}${isRecup ? '🧘' : ''}</span>
+      <span style="font-size:0.75rem;color:${isComplete ? 'var(--good-text)' : 'var(--ink-mute)'};">${isComplete ? '✅ Complète' : `${doneCount}/${totalDays}`}</span>
+    `;
+    details.appendChild(summary);
+
+    let contentHtml = `<div style="padding:10px 12px 14px;background:var(--navy-deep);">`;
+    if (locked) {
+      contentHtml += `<div style="background:rgba(226,84,90,0.1);border-left:3px solid var(--danger-text);padding:8px 12px;border-radius:4px;margin-bottom:10px;color:var(--danger-text);">
+        ⛔ Effort intense verrouillé par la logique de sécurité tension/symptômes. Privilégiez récupération et recontrôle.
+      </div>`;
+    }
+    if (isRecup) {
+      contentHtml += `<div style="background:rgba(126,174,126,0.1);border-left:3px solid var(--green-text);padding:8px 12px;border-radius:4px;margin-bottom:10px;color:var(--green-text);">
+        🧘 Mode Récupération — Objectif calorique réduit (1800 kcal), séances très légères.
+      </div>`;
+    }
+    if (isVacances) {
+      contentHtml += `<div style="background:rgba(245,158,11,0.1);border-left:3px solid var(--orange-text);padding:8px 12px;border-radius:4px;margin-bottom:10px;color:var(--orange-text);">
+        🏖️ Mode Vacances — Objectif 1850 kcal, activités légères.
+      </div>`;
+    }
+    DAY_KEYS.forEach((dayKey, dIdx) => {
+      const label = DAY_LABELS[dIdx];
+      const icon = DAY_ICONS[dIdx];
+      contentHtml += `<h4 style="font-family:Georgia,serif;font-size:0.95rem;margin:8px 0 4px;color:var(--gold-text);">${icon} ${label}</h4>`;
+      
+      const warmups = getWarmups()[dayKey] || [];
+      if (warmups.length > 0) {
+        contentHtml += `<div class="warmup-box"><h4>🔥 Échauffement</h4><ul>`;
+        warmups.forEach(wu => {
+          contentHtml += `<li><span>${wu.name}</span><span>${wu.detail}</span></li>`;
+        });
+        contentHtml += `</ul></div>`;
+      }
+      
+      const exos = getExercises()[dayKey] || [];
+      exos.forEach(exo => {
+        let chargeText = '';
+        if (exo.charge) {
+          const val = w[exo.charge] || 0;
+          chargeText = ` · ${val} kg`;
+        }
+        // Construction de la ligne d'info complète
+        let info = `${exo.sets}×${exo.reps}`;
+        if (exo.tempo && exo.tempo !== "—") info += ` · tempo ${exo.tempo}`;
+        if (exo.rest_between_sets && exo.rest_between_sets !== "—") info += ` · repos ${exo.rest_between_sets}`;
+        if (exo.rest_between_exercises && exo.rest_between_exercises !== "—") info += ` · entre exos ${exo.rest_between_exercises}`;
+        info += chargeText;
+        
+        // Récupérer la performance existante
+        const perfKey = performanceKey(weekNum, dayKey, exo.name);
+        const perf = state.cyclePerformance?.[perfKey] || {};
+        const rirValue = perf.rir || '';
+        const qualityValue = perf.quality || '';
+        
+        contentHtml += `
+          <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line);font-size:0.8rem;align-items:center;flex-wrap:wrap;gap:4px;">
+            <span style="color:var(--ink);">${exo.name}</span>
+            <span style="color:var(--ink-mute);font-size:0.75rem;text-align:right;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              ${info}
+              <span style="display:inline-flex;gap:4px;align-items:center;background:var(--navy);padding:2px 6px;border-radius:12px;flex-wrap:wrap;">
+                ${exo.charge ? `<input type="number" min="1" max="50" step="1" class="reps-input perf-select" data-week="${weekNum}" data-day="${dayKey}" data-exo="${exo.name}" value="${perf.reps ?? ''}" placeholder="Reps min." title="Nombre minimal de répétitions réalisées sur les séries de travail" style="width:70px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:2px 4px;font-size:0.7rem;color:var(--ink);min-height:24px;">` : ''}
+                <select class="rir-select perf-select" data-week="${weekNum}" data-day="${dayKey}" data-exo="${exo.name}" style="background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:2px 4px;font-size:0.7rem;color:var(--ink);min-height:24px;">
+                  <option value="">RIR</option>
+                  <option value="3+" ${rirValue === '3+' ? 'selected' : ''}>3+</option>
+                  <option value="2" ${rirValue === '2' ? 'selected' : ''}>2</option>
+                  <option value="1" ${rirValue === '1' ? 'selected' : ''}>1</option>
+                  <option value="0" ${rirValue === '0' ? 'selected' : ''}>0</option>
+                </select>
+                <select class="quality-select perf-select" data-week="${weekNum}" data-day="${dayKey}" data-exo="${exo.name}" style="background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:2px 4px;font-size:0.7rem;color:var(--ink);min-height:24px;">
+                  <option value="">Qualité</option>
+                  <option value="propre" ${qualityValue === 'propre' ? 'selected' : ''}>✅ Propre</option>
+                  <option value="difficile" ${qualityValue === 'difficile' ? 'selected' : ''}>🟡 Difficile</option>
+                  <option value="echec" ${qualityValue === 'echec' ? 'selected' : ''}>🔴 Échec</option>
+                </select>
+                <select class="pain-select perf-select" data-week="${weekNum}" data-day="${dayKey}" data-exo="${exo.name}" title="Douleur" style="background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:2px 4px;font-size:0.7rem;color:var(--ink);min-height:24px;">
+                  <option value="0" ${String(perf.pain||0)==='0'?'selected':''}>Douleur 0</option><option value="1" ${String(perf.pain)==='1'?'selected':''}>1</option><option value="2" ${String(perf.pain)==='2'?'selected':''}>2</option><option value="3" ${String(perf.pain)==='3'?'selected':''}>3</option><option value="4" ${String(perf.pain)==='4'?'selected':''}>4+</option>
+                </select>
+                <select class="technique-select perf-select" data-week="${weekNum}" data-day="${dayKey}" data-exo="${exo.name}" title="Technique" style="background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:2px 4px;font-size:0.7rem;color:var(--ink);min-height:24px;">
+                  <option value="bonne" ${(!perf.technique||perf.technique==='bonne')?'selected':''}>🎯 Technique OK</option><option value="moyenne" ${perf.technique==='moyenne'?'selected':''}>🟡 À corriger</option><option value="mauvaise" ${perf.technique==='mauvaise'?'selected':''}>🔴 Mauvaise</option>
+                </select>
+                <button class="perf-btn" data-week="${weekNum}" data-day="${dayKey}" data-exo="${exo.name}" onclick="savePerformanceFromUI('${weekNum}','${dayKey}','${exo.name}')">✅</button>
+              </span>
+            </span>
+          </div>
+        `;
+      });
+      const checked = doneObj[dayKey] || false;
+      const checkboxId = `cb_${doneKey}_${dayKey}`;
+      contentHtml += `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding:4px 0;border-top:1px solid var(--line);">
+        <label class="cycle-check-label" for="${checkboxId}">
+          <input type="checkbox" id="${checkboxId}" class="cycle-checkbox" ${checked ? 'checked' : ''} data-week="${doneKey}" data-day="${dayKey}" ${locked ? 'disabled' : ''}>
+          Séance réalisée ${locked ? '(🔒)' : ''}${isRecup ? ' 🧘' : ''}
+        </label>
+      </div>`;
+    });
+    contentHtml += `</div>`;
+    const content = document.createElement('div');
+    content.innerHTML = contentHtml;
+    details.appendChild(content);
+    container.appendChild(details);
+  });
+
+  // ===== ÉDITEUR DE CHARGES =====
+  const editorDiv = document.createElement('div');
+  editorDiv.id = 'chargeEditor';
+  editorDiv.style.cssText = 'margin-top:20px;padding:16px;background:var(--slate);border:1px solid var(--line);border-radius:14px;';
+  
+  let editorHtml = `
+    <h3 style="font-family:Georgia,serif;color:var(--gold-text);margin:0 0 8px;">✏️ Modifier les charges (kg)</h3>
+    <div style="font-size:0.8rem;color:var(--ink-mute);margin-bottom:10px;">Les modifications sont sauvegardées automatiquement dans votre navigateur.</div>
+    <div class="log-table-wrap">
+      <table class="log-table">
+        <thead><tr>
+          <th>Sem.</th>
+          <th>DC plat</th>
+          <th>Incliné H</th>
+          <th>Incliné B</th>
+          <th>Écartés</th>
+          <th>Épaules</th>
+          <th>Biceps</th>
+          <th>Triceps</th>
+          <th>Squat</th>
+          <th>SDT</th>
+        </tr></thead>
+        <tbody id="chargeTableBody">
+  `;
+  
+  const currentWeeks = getCycleWeeks();
+  currentWeeks.forEach((w) => {
+    editorHtml += `
+      <tr>
+        <td><strong>${w.week}</strong></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_dc_plat}" data-field="charge_dc_plat" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_incline_halteres}" data-field="charge_incline_halteres" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_incline_barre}" data-field="charge_incline_barre" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_ecartes}" data-field="charge_ecartes" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_epaules}" data-field="charge_epaules" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_biceps}" data-field="charge_biceps" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_triceps}" data-field="charge_triceps" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_squat}" data-field="charge_squat" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+        <td><input type="number" step="0.5" class="charge-input" value="${w.charge_sdt}" data-field="charge_sdt" style="width:60px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;color:var(--ink);font-size:14px;"></td>
+      </tr>
+    `;
+  });
+  
+  editorHtml += `
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="btn" onclick="saveCustomCharges()">💾 Sauvegarder</button>
+      <button class="btn-sm slate" onclick="resetChargesToDefault()">↺ Réinitialiser</button>
+    </div>
+    <div id="chargeSaveMsg" style="font-size:0.8rem;color:var(--gold-text);margin-top:8px;"></div>
+  `;
+  
+  editorDiv.innerHTML = editorHtml;
+  container.appendChild(editorDiv);
+
+  // ===== LÉGENDE DES TEMPOS =====
+  const tempoLegend = document.createElement('div');
+  tempoLegend.className = 'tempo-legend';
+  tempoLegend.innerHTML = `
+    <strong>⏱️ Légende tempo :</strong>
+    2-1-1 = 2s descente, 1s pause bas, 1s montée · 
+    3-1-1 = 3s descente, 1s pause bas, 1s montée · 
+    3-0-1 = 3s descente, 0s pause, 1s montée · 
+    4-0-1 = 4s descente, 0s pause, 1s montée
+    <br>
+    <strong>📈 Double progression :</strong>
+    D’abord monter les répétitions dans la fourchette. Quand toutes les séries atteignent le haut de la plage avec technique propre, RIR ≥2 et récupération ≥70 → +2,5 % de charge. Douleur/échec/technique dégradée → maintien ou baisse automatique.
+  `;
+  container.appendChild(tempoLegend);
+
+  // Checkboxes
+  document.querySelectorAll('#cycleContainer .cycle-checkbox:not([disabled])').forEach(cb => {
+    cb.addEventListener('change', function(e) {
+      const weekKey = this.dataset.week;
+      const day = this.dataset.day;
+      toggleSession(weekKey, day, this);
+      e.stopPropagation();
+    });
+  });
+
+  // Tableau de progression
+  const tbody = document.getElementById('progBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const weeksData = getCycleWeeks();
+  weeksData.forEach(w => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>Sem. ${w.week}</td>
+      <td style="color:var(--gold-text);font-weight:700;">${w.charge_dc_plat} kg</td>
+      <td>${w.charge_incline_halteres} kg</td>
+      <td>${w.charge_incline_barre} kg</td>
+      <td>${w.charge_ecartes} kg</td>
+      <td>${w.charge_squat} kg</td>
+      <td>${w.charge_sdt} kg</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ============================================================
+// SAUVEGARDE DES CHARGES (manuel)
+// ============================================================
+function saveCustomCharges() {
+  const rows = document.querySelectorAll('#chargeTableBody tr');
+  const newWeeks = [];
+  rows.forEach((row, idx) => {
+    const vals = row.querySelectorAll('.charge-input');
+    newWeeks.push({
+      week: idx + 1,
+      charge_dc_plat: parseFloat(vals[0].value) || 0,
+      charge_incline_halteres: parseFloat(vals[1].value) || 0,
+      charge_incline_barre: parseFloat(vals[2].value) || 0,
+      charge_ecartes: parseFloat(vals[3].value) || 0,
+      charge_epaules: parseFloat(vals[4].value) || 0,
+      charge_biceps: parseFloat(vals[5].value) || 0,
+      charge_triceps: parseFloat(vals[6].value) || 0,
+      charge_squat: parseFloat(vals[7].value) || 0,
+      charge_sdt: parseFloat(vals[8].value) || 0
+    });
+  });
+  saveCycleWeeks(newWeeks);
+  CYCLE_WEEKS = newWeeks;
+  const msg = document.getElementById('chargeSaveMsg');
+  if (msg) {
+    msg.textContent = '✅ Charges sauvegardées dans votre navigateur.';
+    msg.style.color = 'var(--green-text)';
+  }
+  const tbody = document.getElementById('progBody');
+  if (tbody) {
+    tbody.innerHTML = '';
+    newWeeks.forEach(w => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>Sem. ${w.week}</td>
+        <td style="color:var(--gold-text);font-weight:700;">${w.charge_dc_plat} kg</td>
+        <td>${w.charge_incline_halteres} kg</td>
+        <td>${w.charge_incline_barre} kg</td>
+        <td>${w.charge_ecartes} kg</td>
+        <td>${w.charge_epaules} kg</td>
+        <td>${w.charge_biceps} kg</td>
+        <td>${w.charge_triceps} kg</td>
+        <td>${w.charge_squat} kg</td>
+        <td>${w.charge_sdt} kg</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+  showToast('✅ Charges sauvegardées');
+}
+
+function resetChargesToDefault() {
+  if (!confirm('Réinitialiser les charges aux valeurs par défaut ?')) return;
+  localStorage.removeItem(CYCLE_STORAGE_KEY);
+  CYCLE_WEEKS = CYCLE_WEEKS_DEFAULT;
+  saveCycleWeeks(CYCLE_WEEKS_DEFAULT);
+  const msg = document.getElementById('chargeSaveMsg');
+  if (msg) {
+    msg.textContent = '↺ Charges réinitialisées aux valeurs par défaut.';
+    msg.style.color = 'var(--gold-text)';
+  }
+  renderCycle();
+  showToast('↺ Charges réinitialisées');
+}
+
+// ============================================================
+// GRAPHIQUES 
+// ============================================================
+function drawChart(containerId, data, color, label, unit, emptyMsg) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  const valid = data.filter(p => p.v !== null && p.v !== undefined && p.v !== '');
+  if (valid.length < 2) {
+    cont.innerHTML = `<div class="empty-chart">${emptyMsg || 'Ajoutez au moins 2 mesures.'}</div>`;
+    return;
+  }
+  const w = 260, h = 80, pad = 14;
+  const vals = valid.map(p => p.v);
+  const min = Math.min(...vals) * 0.95;
+  const max = Math.max(...vals) * 1.05;
+  const range = (max - min) || 1;
+  const stepX = (w - pad * 2) / (valid.length - 1);
+  const coords = valid.map((p, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((p.v - min) / range) * (h - pad * 2);
+    return [x, y];
+  });
+  const pathD = coords.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+  const areaD = pathD + ` L${coords[coords.length-1][0].toFixed(1)},${h-pad} L${coords[0][0].toFixed(1)},${h-pad} Z`;
+  const gradId = 'grad_' + containerId;
+  const firstLbl = valid[0].label || '';
+  const lastLbl = valid[valid.length-1].label || '';
+  const lastVal = vals[vals.length-1];
+  cont.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;">
+      <defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.2"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0.01"/>
+      </linearGradient></defs>
+      <path d="${areaD}" fill="url(#${gradId})"/>
+      <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+      ${coords.map((c, i) => `
+        <circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3" fill="${color}" stroke="${color}" stroke-width="1.5"/>
+        <text x="${c[0].toFixed(1)}" y="${h-2}" font-size="6" fill="var(--ink-mute)" text-anchor="middle">${valid[i].label || ''}</text>
+      `).join('')}
+      <text x="${w-4}" y="10" font-size="7" fill="${color}" font-weight="700" text-anchor="end">${lastVal}${unit}</text>
+    </svg>
+    <div style="text-align:center;font-size:0.6rem;color:var(--ink-mute);margin-top:2px;">${firstLbl} → ${lastLbl} : ${lastVal}${unit}</div>
+  `;
+}
+
+function drawTensionChart(containerId, data) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  const valid = data.filter(p => p.sys !== null && p.sys !== undefined && p.dia !== null && p.dia !== undefined);
+  if (valid.length < 2) {
+    cont.innerHTML = `<div class="empty-chart">Ajoutez au moins 2 mesures de tension.</div>`;
+    return;
+  }
+  const w = 260, h = 80, pad = 14;
+  const allVals = [...valid.map(p => p.sys), ...valid.map(p => p.dia)];
+  const min = Math.min(...allVals) * 0.90;
+  const max = Math.max(...allVals) * 1.05;
+  const range = (max - min) || 1;
+  const stepX = (w - pad * 2) / (valid.length - 1);
+  const coordsSys = valid.map((p, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((p.sys - min) / range) * (h - pad * 2);
+    return [x, y];
+  });
+  const coordsDia = valid.map((p, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((p.dia - min) / range) * (h - pad * 2);
+    return [x, y];
+  });
+  const pathSys = coordsSys.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+  const pathDia = coordsDia.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+  const diaStatus = valid[valid.length-1]?.dia || 0;
+  const diaColor = diaStatus >= 90 ? 'var(--red-text)' : 'var(--orange-text)';
+  cont.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;">
+      <path d="${pathSys}" fill="none" stroke="var(--red-text)" stroke-width="2" stroke-linecap="round"/>
+      <path d="${pathDia}" fill="none" stroke="${diaColor}" stroke-width="2" stroke-linecap="round"/>
+      ${coordsSys.map((c, i) => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3" fill="var(--red-text)" stroke="var(--red-text)" stroke-width="1.5"/><text x="${c[0].toFixed(1)}" y="${h-2}" font-size="5" fill="var(--ink-mute)" text-anchor="middle">${valid[i].label || ''}</text>`).join('')}
+      ${coordsDia.map((c, i) => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.5" fill="${diaColor}" stroke="${diaColor}" stroke-width="1.5"/>`).join('')}
+      <text x="${w-4}" y="10" font-size="6" fill="var(--red-text)" font-weight="700" text-anchor="end">SYS ${valid[valid.length-1].sys}</text>
+      <text x="${w-4}" y="20" font-size="6" fill="${diaColor}" font-weight="700" text-anchor="end">DIA ${valid[valid.length-1].dia}</text>
+      ${diaStatus >= 90 ? `<text x="${w-4}" y="30" font-size="5" fill="var(--red-text)" text-anchor="end">⚠️ DIA > 90</text>` : ''}
+    </svg>
+    <div style="text-align:center;font-size:0.6rem;color:var(--ink-mute);margin-top:2px;">Évolution de la tension ${diaStatus >= 90 ? '⚠️' : '✅'}</div>
+  `;
+}
+
+function drawSunTensionChart(containerId, data) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  const valid = data.filter(p => p.sun !== null && p.sun !== undefined && p.sun > 0 && p.dia !== null && p.dia !== undefined);
+  if (valid.length < 2) {
+    cont.innerHTML = `<div class="empty-chart">Ajoutez au moins 2 mesures avec exposition solaire.</div>`;
+    return;
+  }
+  const w = 260, h = 80, pad = 14;
+  const sunVals = valid.map(p => p.sun);
+  const diaVals = valid.map(p => p.dia);
+  const allVals = [...sunVals, ...diaVals];
+  const min = Math.min(...allVals) * 0.90;
+  const max = Math.max(...allVals) * 1.05;
+  const range = (max - min) || 1;
+  const stepX = (w - pad * 2) / (valid.length - 1);
+  const coordsSun = valid.map((p, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((p.sun - min) / range) * (h - pad * 2);
+    return [x, y];
+  });
+  const coordsDia = valid.map((p, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((p.dia - min) / range) * (h - pad * 2);
+    return [x, y];
+  });
+  const pathSun = coordsSun.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+  const pathDia = coordsDia.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+  const lastSun = valid[valid.length-1]?.sun || 0;
+  const lastDia = valid[valid.length-1]?.dia || 0;
+  cont.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;">
+      <path d="${pathSun}" fill="none" stroke="#facc15" stroke-width="2" stroke-linecap="round"/>
+      <path d="${pathDia}" fill="none" stroke="var(--orange-text)" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,2"/>
+      ${coordsSun.map((c, i) => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3" fill="#facc15" stroke="#facc15" stroke-width="1.5"/><text x="${c[0].toFixed(1)}" y="${h-2}" font-size="5" fill="var(--ink-mute)" text-anchor="middle">${valid[i].label || ''}</text>`).join('')}
+      ${coordsDia.map((c, i) => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.5" fill="var(--orange-text)" stroke="var(--orange-text)" stroke-width="1.5"/>`).join('')}
+      <text x="${w-4}" y="10" font-size="6" fill="#facc15" font-weight="700" text-anchor="end">☀️ ${lastSun}h</text>
+      <text x="${w-4}" y="20" font-size="6" fill="var(--orange-text)" font-weight="700" text-anchor="end">DIA ${lastDia}</text>
+      ${lastSun > 3 && lastDia > 90 ? `<text x="${w-4}" y="30" font-size="5" fill="var(--red-text)" text-anchor="end">⚠️ Corrélation</text>` : ''}
+    </svg>
+    <div style="text-align:center;font-size:0.6rem;color:var(--ink-mute);margin-top:2px;">☀️ Bronzage vs Tension DIA ${lastSun > 3 && lastDia > 90 ? '⚠️' : '✅'}</div>
+  `;
+}
+
+// ============================================================
+// SUIVI — MESURES 
+// ============================================================
+function readMeasureForm(prefix) {
+  const val = id => document.getElementById(id) ? document.getElementById(id).value : '';
+  return {
+    date: val(`${prefix}-date`),
+    weight: val(`${prefix}-poids`),
+    waist: val(`${prefix}-taille`),
+    chest: val(`${prefix}-poitrine`),
+    fat: val(`${prefix}-mg`),
+    muscle: val(`${prefix}-muscle`),
+    water: val(`${prefix}-eau`),
+    tension: val(`${prefix}-tension`),
+    pulse: val(`${prefix}-pulse`),
+    sun: val(`${prefix}-sun`),
+    dc: val(`${prefix}-dc`),
+    note: val(`${prefix}-note`)
+  };
+}
+
+function parseTension(str) {
+  if (!str) return { sys: null, dia: null };
+  const parts = str.split('/');
+  if (parts.length === 2) {
+    return { sys: parseInt(parts[0]), dia: parseInt(parts[1]) };
+  }
+  return { sys: null, dia: null };
+}
+
+function buildEntry(id, form) {
+  const tension = parseTension(form.tension);
+  return {
+    id: id || generateId(),
+    date: form.date,
+    weight: form.weight ? parseFloat(form.weight) : null,
+    waist: form.waist ? parseFloat(form.waist) : null,
+    chest: form.chest ? parseFloat(form.chest) : null,
+    fat: form.fat ? parseFloat(form.fat) : null,
+    muscle: form.muscle ? parseFloat(form.muscle) : null,
+    water: form.water ? parseFloat(form.water) : null,
+    sys: tension.sys,
+    dia: tension.dia,
+    pulse: form.pulse ? parseInt(form.pulse) : null,
+    sun: form.sun ? parseFloat(form.sun) : null,
+    dc: form.dc || null,
+    note: form.note || null
+  };
+}
+
+function renderLogTable() {
+  const tbody = document.getElementById('suiviBody');
+  if (!tbody) return;
+  const newRow = document.getElementById('newRow');
+  tbody.innerHTML = '';
+  tbody.appendChild(newRow);
+
+  let idsFixed = false;
+  state.logs.forEach(log => { if (!log.id) { log.id = generateId(); idsFixed = true; } });
+  if (idsFixed) saveState();
+
+  const sorted = [...state.logs].sort((a, b) => b.date.localeCompare(a.date));
+  sorted.forEach(log => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = log.id;
+    const formattedDate = log.date || '';
+    const tensionDisplay = log.sys && log.dia ? `${log.sys}/${log.dia}` : '';
+    tr.innerHTML = `
+      <td><input type="date" class="f-date" value="${formattedDate}"></td>
+      <td><input type="number" step="0.1" class="f-poids" value="${log.weight ?? ''}" placeholder="81.5"></td>
+      <td><input type="number" step="0.5" class="f-taille" value="${log.waist ?? ''}" placeholder="90"></td>
+      <td><input type="number" step="0.5" class="f-poitrine" value="${log.chest ?? ''}" placeholder="98"></td>
+      <td><input type="number" step="0.1" class="f-mg" value="${log.fat ?? ''}" placeholder="22.3"></td>
+      <td><input type="number" step="0.1" class="f-muscle" value="${log.muscle ?? ''}" placeholder="39.7"></td>
+      <td><input type="number" step="0.1" class="f-eau" value="${log.water ?? ''}" placeholder="52.1"></td>
+      <td><input type="text" class="f-tension" value="${tensionDisplay}" placeholder="120/80"></td>
+      <td><input type="number" class="f-pulse" value="${log.pulse ?? ''}" placeholder="72"></td>
+      <td><input type="number" step="0.5" class="f-sun" value="${log.sun ?? ''}" placeholder="0"></td>
+      <td><input type="text" class="f-dc" value="${log.dc || ''}" placeholder="55×8"></td>
+      <td><input type="text" class="f-note" value="${escapeHtml(log.note || '')}" placeholder="fatigue..."></td>
+      <td>
+        <div class="actions">
+          <button class="btn-sm gold" onclick="saveRow(this)">💾</button>
+          <button class="btn-sm danger" onclick="deleteRow(this)">🗑️</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function saveRow(btn) {
+  const tr = btn.closest('tr');
+  const id = tr.dataset.id;
+  const form = {
+    date: tr.querySelector('.f-date').value,
+    weight: tr.querySelector('.f-poids').value,
+    waist: tr.querySelector('.f-taille').value,
+    chest: tr.querySelector('.f-poitrine').value,
+    fat: tr.querySelector('.f-mg').value,
+    muscle: tr.querySelector('.f-muscle').value,
+    water: tr.querySelector('.f-eau').value,
+    tension: tr.querySelector('.f-tension').value,
+    pulse: tr.querySelector('.f-pulse').value,
+    sun: tr.querySelector('.f-sun').value,
+    dc: tr.querySelector('.f-dc').value,
+    note: tr.querySelector('.f-note').value
+  };
+  if (!form.date) {
+    const msgEl = document.getElementById('saveMsg');
+    if (msgEl) msgEl.textContent = '⚠️ Date obligatoire.';
+    return;
+  }
+  const index = state.logs.findIndex(l => l.id === id);
+  const entry = buildEntry(id, form);
+  if (index !== -1) {
+    state.logs[index] = entry;
+  } else {
+    state.logs.push(entry);
+  }
+  state.logs.sort((a,b) => a.date.localeCompare(b.date));
+  saveState();
+  const msgEl = document.getElementById('saveMsg');
+  if (msgEl) msgEl.textContent = '✅ Enregistré';
+  renderSuivi();
+  renderDashboard();
+  if (typeof renderProfile === 'function') renderProfile();
+}
+
+function deleteRow(btn) {
+  const tr = btn.closest('tr');
+  const id = tr.dataset.id;
+  if (!id) return;
+  if (!confirm('Supprimer cette ligne ?')) return;
+  state.logs = state.logs.filter(l => l.id !== id);
+  saveState();
+  const msgEl = document.getElementById('saveMsg');
+  if (msgEl) msgEl.textContent = '🗑️ Ligne supprimée';
+  renderSuivi();
+  renderDashboard();
+  if (typeof renderProfile === 'function') renderProfile();
+}
+
+document.getElementById('addNewBtn').addEventListener('click', function() {
+  const form = readMeasureForm('new');
+  if (!form.date) {
+    const msgEl = document.getElementById('saveMsg');
+    if (msgEl) msgEl.textContent = '⚠️ Date obligatoire.';
+    return;
+  }
+  state.logs.push(buildEntry(null, form));
+  state.logs.sort((a,b) => a.date.localeCompare(b.date));
+  saveState();
+  ['date','poids','taille','poitrine','mg','muscle','eau','tension','pulse','sun','dc','note'].forEach(f => {
+    const el = document.getElementById(`new-${f}`);
+    if (el) el.value = '';
+  });
+  const msgEl = document.getElementById('saveMsg');
+  if (msgEl) msgEl.textContent = '✅ Mesure ajoutée';
+  renderSuivi();
+  renderDashboard();
+  if (typeof renderProfile === 'function') renderProfile();
+});
+
+document.getElementById('exportBtn').addEventListener('click', function() {
+  const data = state.logs.map(l => ({
+    date: l.date,
+    poids: l.weight,
+    taille: l.waist,
+    poitrine: l.chest,
+    mg: l.fat,
+    muscle: l.muscle,
+    eau: l.water,
+    sys: l.sys,
+    dia: l.dia,
+    pulse: l.pulse,
+    sun: l.sun,
+    dc: l.dc,
+    note: l.note
+  }));
+  if (data.length === 0) {
+    const msgEl = document.getElementById('saveMsg');
+    if (msgEl) msgEl.textContent = '⚠️ Rien à exporter';
+    return;
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'suivi_phases60.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  const msgEl = document.getElementById('saveMsg');
+  if (msgEl) msgEl.textContent = '⬇️ Exporté';
+});
+
+document.getElementById('exportCsvBtn').addEventListener('click', function() {
+  if (state.logs.length === 0) {
+    const msgEl = document.getElementById('saveMsg');
+    if (msgEl) msgEl.textContent = '⚠️ Rien à exporter';
+    return;
+  }
+  const headers = ['Date','Poids (kg)','Taille (cm)','Poitrine (cm)','MG (%)','Muscle (%)','Eau (%)','Tension','Pouls','Bronzage (h)','DC','Fatigue','Sommeil','Stress','Heure coucher','Remarque'];
+  const fmtNum = v => (v === null || v === undefined || v === '') ? '' : String(v).replace('.', ',');
+  const escapeCsv = v => {
+    const s = String(v ?? '');
+    return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = [...state.logs].sort((a,b) => a.date.localeCompare(b.date)).map(l => {
+    const ds = state.dailyState[l.date] || {};
+    return [
+      l.date || '',
+      fmtNum(l.weight), fmtNum(l.waist), fmtNum(l.chest), fmtNum(l.fat), fmtNum(l.muscle), fmtNum(l.water),
+      (l.sys && l.dia) ? `${l.sys}/${l.dia}` : '',
+      l.pulse ?? '', fmtNum(l.sun), l.dc || '',
+      ds.fatigue ?? '', ds.sleep ?? '', ds.stress ?? '', ds.bedtime || '',
+      l.note || ''
+    ];
+  });
+  const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCsv).join(';')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'suivi_phases60.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  const msgEl = document.getElementById('saveMsg');
+  if (msgEl) msgEl.textContent = '⬇️ CSV exporté (' + state.logs.length + ' mesure(s))';
+});
+
+document.getElementById('exportTensionBtn').addEventListener('click', function() {
+  const withTension = state.logs.filter(l => l.sys && l.dia);
+  if (withTension.length === 0) {
+    const msgEl = document.getElementById('saveMsg');
+    if (msgEl) msgEl.textContent = '⚠️ Aucune mesure de tension';
+    return;
+  }
+  const headers = ['Date','SYS','DIA','Pouls','Remarque'];
+  const escapeCsv = v => {
+    const s = String(v ?? '');
+    return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = [...withTension].sort((a,b) => a.date.localeCompare(b.date)).map(l => [
+    l.date || '', l.sys, l.dia, l.pulse ?? '', l.note || ''
+  ]);
+  const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCsv).join(';')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tension_medecin.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  const msgEl = document.getElementById('saveMsg');
+  if (msgEl) msgEl.textContent = '🩺 Export tension (' + withTension.length + ' mesures)';
+});
+
+(function initBackupRestore() {
+  const btn = document.getElementById('restoreBackupBtn');
+  if (!btn) return;
+  let backup = null;
+  try { backup = JSON.parse(localStorage.getItem(LS_BACKUP_KEY) || 'null'); } catch(e) {}
+  if (!backup) return;
+  btn.style.display = 'inline-block';
+  btn.addEventListener('click', () => {
+    const blob = new Blob([backup.raw], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sauvegarde_corrompue_' + (backup.savedAt || '').slice(0,10) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    const msgEl = document.getElementById('saveMsg');
+    if (msgEl) msgEl.textContent = '🩹 Sauvegarde corrompue téléchargée pour inspection manuelle.';
+  });
+})();
+
+document.getElementById('importBtn').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('Format invalide');
+      let imported = 0, updated = 0;
+      data.forEach(row => {
+        if (!row.date) return;
+        const entry = {
+          date: row.date,
+          weight: row.poids ? parseFloat(row.poids) : null,
+          waist: row.taille ? parseFloat(row.taille) : null,
+          chest: row.poitrine ? parseFloat(row.poitrine) : null,
+          fat: row.mg ? parseFloat(row.mg) : null,
+          muscle: row.muscle ? parseFloat(row.muscle) : null,
+          water: row.eau ? parseFloat(row.eau) : null,
+          sys: row.sys || null,
+          dia: row.dia || null,
+          pulse: row.pulse || null,
+          sun: row.sun || null,
+          dc: row.dc || null,
+          note: row.note || null
+        };
+        const existing = state.logs.find(l => l.date === row.date);
+        if (existing) {
+          Object.assign(existing, entry, { id: existing.id || generateId() });
+          updated++;
+        } else {
+          state.logs.push(Object.assign({ id: generateId() }, entry));
+          imported++;
+        }
+      });
+      state.logs.sort((a,b) => a.date.localeCompare(b.date));
+      saveState();
+      const msgEl = document.getElementById('saveMsg');
+      if (msgEl) msgEl.textContent = `📂 ${imported} importée(s), ${updated} mise(s) à jour`;
+      renderSuivi();
+    } catch(err) {
+      const msgEl = document.getElementById('saveMsg');
+      if (msgEl) msgEl.textContent = '❌ Fichier invalide';
+    } finally {
+      e.target.value = '';
+    }
+  };
+  reader.readAsText(file);
+});
+
+const csvImportOpenBtn = document.getElementById('csvImportOpenBtn');
+if (csvImportOpenBtn) csvImportOpenBtn.addEventListener('click', function() {
+  document.getElementById('csvImportBtn').click();
+});
+const jsonImportOpenBtn = document.getElementById('jsonImportOpenBtn');
+if (jsonImportOpenBtn) jsonImportOpenBtn.addEventListener('click', function() {
+  document.getElementById('importBtn').click();
+});
+
+document.getElementById('csvImportBtn').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  function cleanNumber(raw) {
+    if (raw === undefined || raw === null) return NaN;
+    const cleaned = raw.trim().replace(/^"|"$/g, '').trim().replace(',', '.');
+    return parseFloat(cleaned);
+  }
+  function toIsoDate(raw) {
+    if (!raw) return '';
+    const cleaned = raw.trim().replace(/^"|"$/g, '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+    const parts = cleaned.split('/');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+    }
+    return cleaned;
+  }
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const text = ev.target.result;
+      const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(line => line.trim() !== '');
+      let weightData = {};
+      let sectionIndex = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === 'POIDS') { sectionIndex = i; break; }
+      }
+      if (sectionIndex !== -1) {
+        let headerIndex = -1;
+        for (let i = sectionIndex + 1; i < lines.length; i++) {
+          if (lines[i].startsWith('Date;Heure;Poids')) { headerIndex = i; break; }
+        }
+        if (headerIndex !== -1) {
+          for (let i = headerIndex + 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line.includes(';')) break;
+            const cols = line.split(';');
+            if (cols.length < 8) continue;
+            const date = toIsoDate(cols[0]);
+            const poids = cleanNumber(cols[2]);
+            const fat = cleanNumber(cols[4]);
+            const water = cleanNumber(cols[5]);
+            const muscle = cleanNumber(cols[6]);
+            if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(poids)) continue;
+            weightData[date] = { weight: poids, fat, water, muscle };
+          }
+        }
+      }
+      let tensionData = {};
+      let tensionSection = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === 'TENSION') { tensionSection = i; break; }
+      }
+      if (tensionSection !== -1) {
+        let headerIndex = -1;
+        for (let i = tensionSection + 1; i < lines.length; i++) {
+          if (lines[i].startsWith('Date;Heure;Sys;Dia;Pouls;PAM')) { headerIndex = i; break; }
+        }
+        if (headerIndex !== -1) {
+          for (let i = headerIndex + 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line.includes(';')) break;
+            const cols = line.split(';');
+            if (cols.length < 5) continue;
+            const date = toIsoDate(cols[0]);
+            const sys = cleanNumber(cols[2]);
+            const dia = cleanNumber(cols[3]);
+            const pulse = cleanNumber(cols[4]);
+            if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+            if (!tensionData[date] && !isNaN(sys) && !isNaN(dia)) {
+              tensionData[date] = { sys, dia, pulse: isNaN(pulse) ? null : pulse };
+            }
+          }
+        }
+      }
+      let imported = 0;
+      const allDates = new Set([...Object.keys(weightData), ...Object.keys(tensionData)]);
+      allDates.forEach(date => {
+        const w = weightData[date] || {};
+        const t = tensionData[date] || {};
+        const existing = state.logs.find(l => l.date === date);
+        if (!existing) {
+          state.logs.push({
+            id: generateId(),
+            date: date,
+            weight: w.weight || null,
+            waist: null,
+            chest: null,
+            fat: w.fat || null,
+            muscle: w.muscle || null,
+            water: w.water || null,
+            sys: t.sys || null,
+            dia: t.dia || null,
+            pulse: t.pulse || null,
+            sun: null,
+            dc: null
+          });
+          imported++;
+        } else {
+          if (existing.weight === null && w.weight) existing.weight = w.weight;
+          if (existing.fat === null && w.fat) existing.fat = w.fat;
+          if (existing.muscle === null && w.muscle) existing.muscle = w.muscle;
+          if (existing.water === null && w.water) existing.water = w.water;
+          if (existing.sys === null && t.sys) existing.sys = t.sys;
+          if (existing.dia === null && t.dia) existing.dia = t.dia;
+          if (existing.pulse === null && t.pulse) existing.pulse = t.pulse;
+        }
+      });
+      state.logs.sort((a, b) => a.date.localeCompare(b.date));
+      saveState();
+      const msgEl = document.getElementById('saveMsg');
+      if (msgEl) {
+        msgEl.textContent = `📂 ${imported} mesure(s) importées. Total : ${state.logs.length} mesures.`;
+        msgEl.style.color = 'var(--gold-text)';
+      }
+      renderSuivi();
+    } catch(err) {
+      const msgEl = document.getElementById('saveMsg');
+      if (msgEl) {
+        msgEl.textContent = '❌ Erreur : ' + err.message;
+        msgEl.style.color = 'var(--danger-text)';
+      }
+      console.error(err);
+    } finally {
+      e.target.value = '';
+    }
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('clearBtn').addEventListener('click', function() {
+  if (state.logs.length === 0) {
+    const msgEl = document.getElementById('saveMsg');
+    if (msgEl) msgEl.textContent = 'Aucune mesure.';
+    return;
+  }
+  if (confirm('Effacer TOUTES les mesures ?')) {
+    state.logs = [];
+    saveState();
+    const msgEl = document.getElementById('saveMsg');
+    if (msgEl) msgEl.textContent = '🗑️ Toutes effacées.';
+    renderSuivi();
+  }
+});
+
+function renderSuivi() {
+  renderLogTable();
+  const logs = state.logs || [];
+  const formatLabel = (d) => {
+    if (!d) return '';
+    const parts = d.split('-');
+    if (parts.length < 3) return d;
+    return parts[1] + '/' + parts[2];
+  };
+  drawChart('chartWeight', logs.map(l => ({v: l.weight, label: formatLabel(l.date)})), 'var(--gold-text)', 'Poids', ' kg');
+  drawChart('chartFat', logs.map(l => ({v: l.fat, label: formatLabel(l.date)})), 'var(--orange-text)', 'MG', ' %');
+  drawChart('chartMuscle', logs.map(l => ({v: l.muscle, label: formatLabel(l.date)})), 'var(--pink-text)', 'Muscle', ' %');
+  drawChart('chartWater', logs.map(l => ({v: l.water, label: formatLabel(l.date)})), 'var(--good-text)', 'Eau', ' %');
+  drawChart('chartWaist', logs.map(l => ({v: l.waist, label: formatLabel(l.date)})), '#e2b45a', 'Taille', ' cm');
+  drawChart('chartChest', logs.map(l => ({v: l.chest, label: formatLabel(l.date)})), 'var(--gold-text)', 'Poitrine', ' cm');
+  const tensionData = logs.filter(l => l.sys !== null && l.dia !== null).map(l => ({sys: l.sys, dia: l.dia, label: formatLabel(l.date)}));
+  drawTensionChart('chartTension', tensionData);
+  const sunData = logs.filter(l => l.sun !== null && l.sun > 0 && l.dia !== null).map(l => ({sun: l.sun, dia: l.dia, label: formatLabel(l.date)}));
+  drawSunTensionChart('chartSunTension', sunData);
+  const forceData = logs.map(l => {
+    let val = null;
+    if (l.dc && typeof l.dc === 'string') {
+      const match = l.dc.match(/(\d+)/);
+      if (match) val = parseFloat(match[1]);
+    } else if (typeof l.dc === 'number') {
+      val = l.dc;
+    }
+    return {v: val, label: formatLabel(l.date)};
+  });
+  drawChart('chartStrength', forceData, 'var(--gold-text)', 'DC', ' kg');
+
+  const potassiumHistory = Object.keys(state.extras || {}).sort()
+    .map(date => {
+      const list = state.extras[date] || [];
+      const k = list.reduce((sum, ex) => sum + (ex.potassium || 0), 0);
+      return { v: k > 0 ? k : null, label: formatLabel(date) };
+    });
+  drawChart('chartPotassium', potassiumHistory, 'var(--good-text)', 'Potassium', ' mg',
+    'Ajoutez des aliments datés (onglet Nutrition) pour voir le potassium ici.');
+  if (typeof renderMuscleAnalytics === 'function') renderMuscleAnalytics();
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg) {
+  let cont = document.getElementById('toastContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'toastContainer';
+    cont.style.cssText = 'position:fixed;left:50%;bottom:calc(70px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:100%;padding:0 16px;';
+    document.body.appendChild(cont);
+  }
+  const bubble = document.createElement('div');
+  bubble.textContent = msg;
+  bubble.style.cssText = 'background:var(--slate);border:1px solid var(--gold-dim);color:var(--ink);padding:10px 16px;border-radius:20px;font-size:0.8rem;box-shadow:0 4px 16px rgba(0,0,0,0.3);max-width:400px;text-align:center;opacity:0;transition:opacity 0.25s;';
+  cont.appendChild(bubble);
+  requestAnimationFrame(() => { bubble.style.opacity = '1'; });
+  setTimeout(() => {
+    bubble.style.opacity = '0';
+    setTimeout(() => bubble.remove(), 300);
+  }, 4000);
+}
+
+// ============================================================
+// RAPPELS
+// ============================================================
+let lastHydrationReminder = 0;
+let bedtimeReminderShownDate = null;
+setInterval(() => {
+  const now = Date.now();
+  const temp = state.temperature ?? 24;
+  const hour = new Date().getHours();
+  if (temp > 28 && hour >= 8 && hour <= 20 && now - lastHydrationReminder > 2 * 60 * 60 * 1000) {
+    lastHydrationReminder = now;
+    showToast('💧 Chaleur élevée → hydratez-vous.');
+  }
+  const d = new Date();
+  if (d.getHours() === 22 && d.getMinutes() === 0 && bedtimeReminderShownDate !== todayKey()) {
+    bedtimeReminderShownDate = todayKey();
+    showToast('🛏️ Il est 22h, préparez votre coucher.');
+  }
+}, 60 * 1000);
+
+// ============================================================
+// THÈME
+// ============================================================
+(function initThemeToggle() {
+  const btn = document.getElementById('themeToggle');
+  if (!btn) return;
+  const applyIcon = () => {
+    const isLight = document.body.classList.contains('light-theme');
+    btn.textContent = isLight ? '☀️' : '🌙';
+    btn.setAttribute('aria-pressed', isLight ? 'true' : 'false');
+  };
+  applyIcon();
+  btn.addEventListener('click', () => {
+    document.body.classList.toggle('light-theme');
+    const isLight = document.body.classList.contains('light-theme');
+    try { localStorage.setItem('phase60_theme', isLight ? 'light' : 'dark'); } catch (e) {}
+    applyIcon();
+  });
+})();
+
+// ============================================================
+// INIT
+// ============================================================
+function renderAll() {
+  renderDashboard();
+  if (currentPage === 'nutrition') renderNutrition();
+  if (currentPage === 'recettes') renderRecipes();
+  if (currentPage === 'cycle') renderCycle();
+  if (currentPage === 'suivi') renderSuivi();
+}
+
+populateFoodList();
+const activeDayMode = state.dayMode || 'standard';
+document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === activeDayMode));
+document.querySelectorAll('[data-program]').forEach(b => b.classList.toggle('active', b.dataset.program === state.program));
+
+document.getElementById('sysInput').value = state.tension?.sys || 120;
+document.getElementById('diaInput').value = state.tension?.dia || 80;
+document.getElementById('pulseInput').value = state.tension?.pulse || 72;
+document.getElementById('sunInput').value = state.tension?.sun || 0;
+
+state.temperature = state.temperature ?? 24;
+const tempInputEl = document.getElementById('tempInput');
+if (tempInputEl) {
+  tempInputEl.value = state.temperature;
+  tempInputEl.addEventListener('change', updateTemperature);
+}
+
+const extraDateInput = document.getElementById('extraDate');
+if (extraDateInput) {
+  extraDateInput.value = extrasViewDate;
+  extraDateInput.addEventListener('change', function() { setExtrasViewDate(this.value); });
+}
+const prevBtn = document.getElementById('extraDatePrev');
+if (prevBtn) prevBtn.addEventListener('click', function() { setExtrasViewDate(addDaysToKey(extrasViewDate, -1)); });
+const nextBtn = document.getElementById('extraDateNext');
+if (nextBtn) nextBtn.addEventListener('click', function() { setExtrasViewDate(addDaysToKey(extrasViewDate, 1)); });
+const todayBtn = document.getElementById('extraDateToday');
+if (todayBtn) todayBtn.addEventListener('click', function() { setExtrasViewDate(todayKey()); });
+
+updateStatus();
+renderAll();
+</script>
+<script>
+// ============================================================
+// V5.7 — PROFIL, RÉCUPÉRATION, PROGRESSION ET ANALYSE MUSCULAIRE
+// ============================================================
+function getProfile(){ return Object.assign({}, DEFAULT_STATE.profile, state.profile || {}); }
+function recoveryScore(){
+  const d=getDailyState(todayKey())||{fatigue:5,sleep:5,stress:5};
+  const bp=getTensionStatus();
+  const cardio=bp==='green'?90:bp==='orange'?60:20;
+  let perf=75;
+  const recent=Object.values(state.cyclePerformance||{}).filter(x=>x?.date).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);
+  if(recent.length) perf=Math.max(35,90-recent.filter(x=>x.quality==='echec'||x.quality==='difficile'||(+x.pain||0)>=3).length*12);
+  return Math.round((+d.sleep||5)*10*.25+(10-(+d.fatigue||5))*10*.25+(10-(+d.stress||5))*10*.15+perf*.15+cardio*.20);
+}
+function getAdaptiveRecommendation(){
+  const score=recoveryScore(), bp=getTensionStatus();
+  let main;
+  if(bp==='red') main={icon:'🚨',color:'var(--red-text)',title:'Pas de séance intense',msg:'Valeur très inhabituelle ou symptôme signalé : repos, nouvelle mesure dans de bonnes conditions et avis approprié si nécessaire.'};
+  else if(bp==='orange') main={icon:'🟠',color:'var(--orange-text)',title:'Prudence renforcée',msg:'Mesure inhabituelle : séance allégée ou récupération active, puis recontrôle avant effort intense.'};
+  else if(score>=85) main={icon:'🟢',color:'var(--green-text)',title:`Récupération ${score}/100`,msg:'Séance prévue, RIR cible du programme.'};
+  else if(score>=70) main={icon:'🟢',color:'var(--green-text)',title:`Récupération ${score}/100`,msg:'Séance normale avec une marge de sécurité supplémentaire.'};
+  else if(score>=55) main={icon:'🟠',color:'var(--orange-text)',title:`Récupération ${score}/100`,msg:'Réduire le volume d’environ 25 %, viser 2–3 RIR.'};
+  else if(score>=40) main={icon:'🚶',color:'var(--orange-text)',title:`Récupération ${score}/100`,msg:'Récupération active plutôt que surcharge progressive.'};
+  else main={icon:'🛌',color:'var(--red-text)',title:`Récupération ${score}/100`,msg:'Repos conseillé.'};
+  return {main,extra:[]};
+}
+function hydrationTarget(){
+  const p=getProfile(); let x=Math.max(1800,Math.round(getEffectiveWeight()*(+p.hydrationMlKg||30)));
+  if((+state.temperature||24)>=26)x+=300; if((+state.temperature||24)>=30)x+=300;
+  return Math.round(x/100)*100;
+}
+updateHydrationGauge=function(){
+  const h=getHydration(todayKey()), total=(h.water||0)+(h.infusion||0)+(h.pasteque||0), target=hydrationTarget();
+  const f=document.getElementById('hydrationFill'),c=document.getElementById('hydrationCurrent'),l=document.getElementById('hydrationTargetLabel'),d=document.getElementById('hydrationDetail');
+  if(f)f.style.width=Math.min(100,total/target*100)+'%'; if(c)c.textContent=total+' ml'; if(l)l.textContent=target+' ml'; if(d)d.textContent=`Total ${total} ml · objectif ${target} ml · reste ${Math.max(0,target-total)} ml`;
+};
+function renderProfile(){
+  const p=getProfile(), m={pAge:p.age,pHeight:p.height,pWeight:p.weight,pSodium:p.sodiumTarget,pPotassium:p.potassiumTarget,pHydration:p.hydrationMlKg,pSupplement:p.supplementLabel,pDose:p.supplementDose};
+  for(const[k,v]of Object.entries(m)){const e=document.getElementById(k);if(e)e.value=v??'';}
+  const c=document.getElementById('pSymptoms');if(c)c.checked=!!state.symptomsToday;
+}
+function renderProfileRepereCard(){
+  const p=getProfile();
+  const latest={
+    weight:getLatestTrackedMetric('weight'), waist:getLatestTrackedMetric('waist'), chest:getLatestTrackedMetric('chest'),
+    fat:getLatestTrackedMetric('fat'), muscle:getLatestTrackedMetric('muscle'), water:getLatestTrackedMetric('water')
+  };
+  const summary=document.getElementById('profileSummary');
+  if(summary) summary.textContent=`Profil enregistré : ${Number(p.age)||'—'} ans · ${Number(p.height)||'—'} cm · poids ${Number(p.weight).toFixed(1)} kg`;
+  const targets=document.getElementById('profileTargetsSummary');
+  if(targets) targets.textContent=`Repères profil : sodium ${Number(p.sodiumTarget)||2000} mg/j · potassium ${Number(p.potassiumTarget)||3500} mg/j · hydratation ${Number(p.hydrationMlKg)||30} ml/kg`;
+  const set=(id,item,unit,fallback=null)=>{
+    const el=document.getElementById(id); if(!el)return;
+    const value=item?.value ?? fallback;
+    el.textContent=(value===null||value===undefined||!Number.isFinite(Number(value)))?'—':`${Number(value).toFixed(1)} ${unit}`;
+  };
+  set('statWeight',latest.weight,'kg',Number(p.weight));
+  set('statWaist',latest.waist,'cm');
+  set('statChest',latest.chest,'cm');
+  set('statFat',latest.fat,'%');
+  set('statMuscle',latest.muscle,'%');
+  set('statWater',latest.water,'%');
+  const dates=Object.values(latest).filter(Boolean).map(x=>x.date).sort();
+  const source=document.getElementById('repereSource');
+  if(source){
+    const lastDate=dates.length?dates[dates.length-1]:null;
+    source.textContent=lastDate?`Mesures corporelles : dernier Suivi disponible jusqu’au ${lastDate.split('-').reverse().join('/')} · poids du Profil utilisé seulement si aucun poids n’est suivi.`:'Aucune mesure dans Suivi : le poids affiché provient du Profil enregistré ; ajoutez une mesure pour compléter les repères.';
+  }
+}
+function saveProfile(){
+  state.profile={...getProfile(),age:+pAge.value||60,height:+pHeight.value||180,weight:+pWeight.value||80,sodiumTarget:+pSodium.value||2000,potassiumTarget:+pPotassium.value||3500,hydrationMlKg:+pHydration.value||30,supplementLabel:pSupplement.value||'Supplément personnalisé',supplementDose:pDose.value||''};
+  saveState(); renderProfile(); renderAll(); showToast('👤 Profil enregistré · Accueil et cibles recalculés');
+}
+function exportBackup(){
+  const payload={version:'5.7.1',schemaVersion:7,savedAt:new Date().toISOString(),state,charges:localStorage.getItem(CYCLE_STORAGE_KEY)};
+  const b=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download='phase60plus_v5_7_backup_'+todayKey()+'.json';a.click();URL.revokeObjectURL(a.href);
+}
+function restoreBackup(file){
+  if(!file)return;const r=new FileReader();r.onload=()=>{try{const x=JSON.parse(r.result);const restored=normalizeStateV57(x.state||x);localStorage.setItem(LS_KEY,JSON.stringify(restored));if(x.charges)localStorage.setItem(CYCLE_STORAGE_KEY,x.charges);location.reload();}catch(e){showToast('⚠️ Sauvegarde invalide');}};r.readAsText(file);
+}
+
+function performanceKey(weekNum,dayKey,exoName){ return `${state.program}::${state.dayMode}_week${weekNum}_${dayKey}_${exoName}`; }
+function repRangeMax(repText){
+  const m=String(repText||'').match(/(\d+)\s*[-–]\s*(\d+)/);return m?+m[2]:null;
+}
+function progressionDecision(rir,quality,pain,technique,recovery,reps,targetMax){
+  if(getTensionStatus()==='red') return {action:'hold',delta:0,msg:'Progression suspendue : sécurité tension/symptômes prioritaire.'};
+  if(pain>=4||technique==='mauvaise') return {action:'reduce',delta:-.10,msg:'Douleur/technique : charge -10 % et priorité au mouvement sans douleur.'};
+  if(pain>=2||technique==='moyenne') return {action:'hold',delta:0,msg:'Charge maintenue : consolider la technique avant progression.'};
+  if(quality==='echec'||rir==='0') return {action:'reduce',delta:-.05,msg:'Échec ou RIR 0 : charge -5 % la prochaine fois.'};
+  if(quality==='difficile'||rir==='1') return {action:'hold',delta:0,msg:'Charge maintenue : réserve insuffisante pour augmenter.'};
+  if(quality==='propre'&&(rir==='2'||rir==='3+')){
+    if(recovery<70) return {action:'hold',delta:0,msg:'Performance suffisante, mais récupération trop basse : charge maintenue.'};
+    if(targetMax!==null){
+      if(reps===null||!Number.isFinite(+reps)) return {action:'hold',delta:0,msg:`Bonne séance : conserver la charge et renseigner les répétitions. Monter la charge seulement lorsque toutes les séries atteignent ${targetMax} reps avec RIR ≥2.`};
+      if(+reps<targetMax) return {action:'hold',delta:0,msg:`Priorité aux répétitions : garder la charge jusqu’à atteindre au moins ${targetMax} reps sur toutes les séries de travail avec RIR ≥2.`};
+    }
+    return {action:'increase',delta:.025,msg:'Haut de fourchette atteint, exécution propre, RIR ≥2 et récupération correcte : +2,5 %.'};
+  }
+  return {action:'hold',delta:0,msg:'Charge maintenue.'};
+}
+function savePerformance(weekNum,dayKey,exoName,rir,quality,pain,technique,reps=null){
+  const exo=getExercises()[dayKey]?.find(e=>e.name===exoName), targetMax=repRangeMax(exo?.reps);
+  const recovery=recoveryScore(), decision=progressionDecision(rir,quality,pain,technique,recovery,reps,targetMax), key=performanceKey(weekNum,dayKey,exoName);
+  state.cyclePerformance=state.cyclePerformance||{};
+  state.cyclePerformance[key]={program:state.program,dayMode:state.dayMode,rir,quality,pain,technique,recovery,reps:reps===null?null:+reps,targetMax,decision:decision.action,date:todayKey()};
+  saveState(); applyProgression(weekNum,dayKey,exoName,decision);
+  showToast((decision.action==='increase'?'📈 ':decision.action==='reduce'?'📉 ':'➡️ ')+decision.msg);
+}
+function applyProgression(weekNum,dayKey,exoName,decision){
+  const exo=getExercises()[dayKey]?.find(e=>e.name===exoName);if(!exo?.charge)return;
+  const currentWeek=+weekNum,nextWeek=currentWeek+1;if(nextWeek>CYCLE_LENGTH)return;
+  const weeks=getCycleWeeks(),current=weeks.find(w=>w.week===currentWeek)?.[exo.charge],next=weeks.find(w=>w.week===nextWeek);
+  if(current==null||!next)return;
+  let value=+current;if(decision.delta)value*=1+decision.delta;value=Math.max(2,Math.round(value*2)/2);
+  next[exo.charge]=value;saveCycleWeeks(weeks);CYCLE_WEEKS=weeks;renderCycle();
+}
+
+// --- Mesures : moyennes/tendances 7 et 14 jours ---
+function parseBenchValue(value){
+  if(typeof value==='number'&&Number.isFinite(value))return value;
+  const m=String(value??'').replace(',','.').match(/(\d+(?:\.\d+)?)/);return m?parseFloat(m[1]):null;
+}
+function numericMetric(log,metric){ if(metric==='dc')return parseBenchValue(log.dc);const v=Number(log[metric]);return Number.isFinite(v)?v:null; }
+function datedLogs(){return (state.logs||[]).filter(l=>/^\d{4}-\d{2}-\d{2}$/.test(l.date||'')).slice().sort((a,b)=>a.date.localeCompare(b.date));}
+function windowLogs(days,offsetDays=0){
+  const logs=datedLogs();if(!logs.length)return[];const anchor=new Date(logs[logs.length-1].date+'T12:00:00');
+  const end=new Date(anchor);end.setDate(end.getDate()-offsetDays);const start=new Date(end);start.setDate(start.getDate()-(days-1));
+  return logs.filter(l=>{const d=new Date(l.date+'T12:00:00');return d>=start&&d<=end;});
+}
+function metricWindow(metric,days,offsetDays=0){
+  const rows=windowLogs(days,offsetDays).map(l=>({date:l.date,v:numericMetric(l,metric)})).filter(x=>x.v!==null);
+  if(!rows.length)return{count:0,avg:null,trend:null,first:null,last:null};
+  const avg=rows.reduce((s,x)=>s+x.v,0)/rows.length;
+  let trend=null;if(rows.length>=2){const firstHalf=rows.slice(0,Math.ceil(rows.length/2)),lastHalf=rows.slice(Math.floor(rows.length/2));const a=firstHalf.reduce((s,x)=>s+x.v,0)/firstHalf.length,b=lastHalf.reduce((s,x)=>s+x.v,0)/lastHalf.length;trend=b-a;}
+  return{count:rows.length,avg,trend,first:rows[0].v,last:rows[rows.length-1].v};
+}
+function fmtMetric(v,digits=1){return v===null||!Number.isFinite(v)?'—':v.toFixed(digits);}
+function trendArrow(v){if(v===null||Math.abs(v)<0.05)return'→';return v>0?'↗':'↘';}
+function metricDelta(metric){
+  const cur=metricWindow(metric,14,0),prev=metricWindow(metric,14,14);
+  if(cur.avg===null||prev.avg===null)return null;return cur.avg-prev.avg;
+}
+function buildMuscleAssessment(){
+  const weightCur=metricWindow('weight',14), weightPrev=metricWindow('weight',14,14);
+  const waistDelta=metricDelta('waist'), chestDelta=metricDelta('chest'), dcDelta=metricDelta('dc'), fatDelta=metricDelta('fat'), muscleDelta=metricDelta('muscle'), waterDelta=metricDelta('water');
+  if(weightCur.count<2) return {status:'insufficient',label:'Données insuffisantes',message:'Ajoutez au moins deux mesures de poids sur une fenêtre de 14 jours, puis idéalement taille, poitrine, développé couché et composition corporelle.',details:{}};
+  let weeklyPct=null;
+  if(weightPrev.avg!==null&&weightPrev.avg>0) weeklyPct=((weightCur.avg-weightPrev.avg)/weightPrev.avg)*100/2;
+  else if(weightCur.first&&weightCur.last&&weightCur.first>0) weeklyPct=((weightCur.last-weightCur.first)/weightCur.first)*100*(7/13);
+  const strengthPositive=dcDelta!==null&&dcDelta>0.25;
+  const chestPositive=chestDelta!==null&&chestDelta>0.2;
+  const compositionPositive=(muscleDelta!==null&&muscleDelta>=0)||(fatDelta!==null&&fatDelta<=0);
+  const waistControlled=waistDelta===null||waistDelta<=0.6;
+  let status='compatible',label='Trajectoire compatible',message='La trajectoire disponible reste compatible avec une prise musculaire contrôlée.';
+  if(weeklyPct!==null&&weeklyPct>0.35){status='fast';label='Prise trop rapide';message='La prise de poids dépasse nettement la cible de +0,10 à +0,25 %/semaine. Réduire légèrement le surplus, surtout si le tour de taille augmente.';}
+  else if(weeklyPct!==null&&weeklyPct>0.25){status='watch';label='Haut de fourchette';message='La prise de poids est un peu au-dessus de la cible. Maintenir seulement si force/poitrine progressent et si le tour de taille reste contenu.';}
+  else if(weeklyPct!==null&&weeklyPct>=0.10&&weeklyPct<=0.25){
+    if(strengthPositive||chestPositive||compositionPositive){status='ideal';label='Trajectoire cible';message='Poids dans la cible de +0,10 à +0,25 %/semaine avec au moins un signal favorable de force, poitrine ou composition corporelle.';}
+    else {status='compatible';label='Poids dans la cible';message='La vitesse de prise de poids est correcte. Continuer et rechercher maintenant une progression du développé couché, de la poitrine ou de la composition corporelle.';}
+  }
+  else if(weeklyPct!==null&&weeklyPct<0){status='low';label='Apport probablement insuffisant';message='La tendance pondérale reste négative : augmenter légèrement l’apport énergétique avant d’ajouter du volume d’entraînement.';}
+  else if((weeklyPct===null||weeklyPct<0.10)&&!strengthPositive&&!chestPositive&&!compositionPositive){status='stalled';label='Trajectoire à relancer';message='La prise de poids est sous la cible et aucun signal musculaire net n’apparaît. Vérifier surplus calorique, protéines, récupération et progression.';}
+  else if(!waistControlled&&!strengthPositive&&!compositionPositive){status='watch';label='À surveiller';message='Le tour de taille progresse sans signal suffisant de force ou de composition corporelle.';}
+  const details={weeklyPct,targetMinPct:0.10,targetMaxPct:0.25,weightAvg7:metricWindow('weight',7).avg,weightAvg14:weightCur.avg,waistDelta,chestDelta,dcDelta,fatDelta,muscleDelta,waterDelta};
+  return{status,label,message,details};
+}
+function ensureBiweeklyAssessment(){
+  const assessment=buildMuscleAssessment();if(assessment.status==='insufficient')return assessment;
+  state.biweeklyAssessments=Array.isArray(state.biweeklyAssessments)?state.biweeklyAssessments:[];
+  const last=state.biweeklyAssessments[state.biweeklyAssessments.length-1];
+  const today=todayKey();
+  const daysSince=last?Math.floor((new Date(today+'T12:00:00')-new Date(last.date+'T12:00:00'))/86400000):Infinity;
+  if(daysSince>=14){state.biweeklyAssessments.push({date:today,...assessment});if(state.biweeklyAssessments.length>26)state.biweeklyAssessments=state.biweeklyAssessments.slice(-26);saveState();}
+  return assessment;
+}
+function renderMuscleDashboard(){
+  const effectiveWeight=getEffectiveWeight(),target=calculateProteinTarget(effectiveWeight),range=calculateProteinRange(effectiveWeight),w7=metricWindow('weight',7),w14=metricWindow('weight',14),assessment=ensureBiweeklyAssessment();
+  const protein=document.getElementById('muscleProteinTarget');if(protein)protein.textContent=target+' g';
+  const header=document.getElementById('proteinGoalHeader');if(header)header.textContent=`${target} g/j · plage ${range[0]}–${range[1]} g`;
+  const a=document.getElementById('muscleWeight7');if(a)a.textContent=w7.avg===null?'—':w7.avg.toFixed(1)+' kg';
+  const b=document.getElementById('muscleWeight14');if(b)b.textContent=w14.avg===null?'—':w14.avg.toFixed(1)+' kg';
+  const r=document.getElementById('muscleRecoveryScore');if(r)r.textContent=recoveryScore()+'/100';
+  const t=document.getElementById('muscleTrajectory');if(t){const wp=assessment.details.weeklyPct,ref=w14.avg||effectiveWeight,minKg=ref*.001,maxKg=ref*.0025;t.innerHTML=`<strong>${assessment.label}</strong> — ${assessment.message}<br><span style="font-size:.74rem;">Cible : +0,10 à +0,25 %/sem. ≈ +${minKg.toFixed(2)} à +${maxKg.toFixed(2)} kg/sem.${wp!==null&&wp!==undefined?` · observé ${wp>=0?'+':''}${wp.toFixed(2)} %/sem.`:''}</span>`;}
+  const chest=document.getElementById('chestPriorityContent');if(chest){const dc14=metricWindow('dc',14), chest14=metricWindow('chest',14);if(state.program==='upper_focus'){chest.innerHTML=`<strong style="color:var(--gold-text);">Programme actif · bloc 8 semaines.</strong> Pectoraux : 16 séries directes/semaine (9 lundi + 7 jeudi). Dos : 6 séries de rowing + 2 séries de face pull pour préserver l’équilibre du haut du corps. DC moyen 14 j : <strong>${dc14.avg===null?'—':dc14.avg.toFixed(1)+' kg'}</strong> · Poitrine moyenne 14 j : <strong>${chest14.avg===null?'—':chest14.avg.toFixed(1)+' cm'}</strong>.`;}else{chest.innerHTML=`Programme <strong>Équilibré</strong> actif. La carte suit quand même le développé couché et le tour de poitrine. Sélectionnez <strong>Upper Focus — Pectoraux</strong> si vous souhaitez donner la priorité au volume pectoral.`;}}
+}
+function renderMuscleAnalytics(){
+  const cont=document.getElementById('trendSummary');if(!cont)return;
+  const specs=[['weight','Poids','kg'],['waist','Taille','cm'],['chest','Poitrine','cm'],['dc','DC','kg'],['fat','Masse grasse','%'],['muscle','Muscle','%'],['water','Eau corporelle','%']];
+  cont.innerHTML=specs.map(([m,label,unit])=>{const s7=metricWindow(m,7),s14=metricWindow(m,14);return `<div class="trend-item"><div class="trend-title">${label}</div><div class="trend-value">7 j ${fmtMetric(s7.avg)} ${unit} ${trendArrow(s7.trend)}</div><div style="font-size:.7rem;color:var(--ink-mute);">14 j ${fmtMetric(s14.avg)} ${unit} ${trendArrow(s14.trend)} · n=${s14.count}</div></div>`;}).join('');
+  const assessment=ensureBiweeklyAssessment(),box=document.getElementById('biweeklyAssessment');if(box){const d=assessment.details||{};const parts=[];if(d.weeklyPct!=null)parts.push(`poids ${d.weeklyPct>=0?'+':''}${d.weeklyPct.toFixed(2)} %/sem.`);if(d.waistDelta!=null)parts.push(`taille ${d.waistDelta>=0?'+':''}${d.waistDelta.toFixed(1)} cm/14 j`);if(d.chestDelta!=null)parts.push(`poitrine ${d.chestDelta>=0?'+':''}${d.chestDelta.toFixed(1)} cm/14 j`);if(d.dcDelta!=null)parts.push(`DC ${d.dcDelta>=0?'+':''}${d.dcDelta.toFixed(1)} kg/14 j`);if(d.muscleDelta!=null)parts.push(`muscle ${d.muscleDelta>=0?'+':''}${d.muscleDelta.toFixed(1)} pt/14 j`);if(d.fatDelta!=null)parts.push(`MG ${d.fatDelta>=0?'+':''}${d.fatDelta.toFixed(1)} pt/14 j`);box.innerHTML=`<strong>${assessment.label}</strong> — ${assessment.message}<br><span style="font-size:.74rem;">Cible poids : +0,10 à +0,25 %/sem.${parts.length?' · '+parts.join(' · '):''}</span>`;}
+}
+
+document.addEventListener('DOMContentLoaded',()=>{renderProfile();renderProfileRepereCard();updateHydrationGauge();renderAdaptiveRecommendation();renderMuscleDashboard();if(currentPage==='suivi')renderMuscleAnalytics();});
+</script>
+<script>
+// --- Installation PWA / fonctionnement hors connexion ---
+let phase60InstallPrompt = null;
+
+function phase60CreateInstallButton() {
+  if (document.getElementById('phase60InstallBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'phase60InstallBtn';
+  btn.type = 'button';
+  btn.className = 'btn-sm gold';
+  btn.textContent = '📲 Installer Phase60+';
+  btn.style.position = 'fixed';
+  btn.style.right = '14px';
+  btn.style.bottom = 'calc(14px + env(safe-area-inset-bottom))';
+  btn.style.zIndex = '9999';
+  btn.style.boxShadow = '0 6px 20px rgba(0,0,0,.28)';
+  btn.addEventListener('click', async () => {
+    if (!phase60InstallPrompt) return;
+    phase60InstallPrompt.prompt();
+    try { await phase60InstallPrompt.userChoice; } catch (e) {}
+    phase60InstallPrompt = null;
+    btn.remove();
+  });
+  document.body.appendChild(btn);
+}
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  phase60InstallPrompt = event;
+  phase60CreateInstallButton();
+});
+
+window.addEventListener('appinstalled', () => {
+  phase60InstallPrompt = null;
+  const btn = document.getElementById('phase60InstallBtn');
+  if (btn) btn.remove();
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch((err) => {
+      console.warn('Service Worker non enregistré :', err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>
