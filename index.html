@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Phase60Plus V5.8 PWA — Construction musculaire</title>
+<style>
+  :root{
+    --navy:#0e1a2b;
+    --navy-deep:#0a1420;
+    --slate:#17273e;
+    --slate-light:#22374f;
+    --gold:#c9a24a;
+    --gold-dim:#8f7735;
+    --ink:#e9e6dc;
+    --ink-mute:#94a3b8;
+    --line:#2a3c56;
+    --good:#7fae7f;
+    --danger:#e2545a;
+    --orange:#f59e0b;
+    --red:#e2545a;
+    --green:#7fae7f;
+    --pink:#ec4899;
+    --on-accent:#0a1420;
+    --gold-text:#c9a24a;
+    --orange-text:#f59e0b;
+    --green-text:#7fae7f;
+    --good-text:#7fae7f;
+    --red-text:#e2545a;
+    --danger-text:#e2545a;
+    --pink-text:#ec4899;
+  }
+  body.light-theme{
+    --navy:#ffffff;
+    --navy-deep:#f6f2e8;
+    --slate:#ffffff;
+    --slate-light:#eef0f4;
+    --gold-dim:#c9a24a;
+    --ink:#1b2430;
+    --ink-mute:#5b6b82;
+    --line:#dfe3ea;
+    --gold-text:#78612c;
+    --orange-text:#935e06;
+    --green-text:#4c684c;
+    --good-text:#4c684c;
+    --red-text:#c53a40;
+    --danger-text:#c53a40;
+    --pink-text:#a8226a;
+  }
+  body.calm-mode:not(.light-theme){
+    --gold:#5b8dd6;
+    --gold-text:#7ba7e0;
+    --gold-dim:#4a76b8;
+  }
+  body.calm-mode.light-theme{
+    --gold:#3a6bb5;
+    --gold-text:#3a6bb5;
+    --gold-dim:#2f568f;
+  }
+  body.calm-mode .card, body.calm-mode .status-card, body.calm-mode .meal-item, body.calm-mode .chart-box{
+    border-radius:22px;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    body{transition:background-color 0.4s;}
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--navy-deep);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5;padding-bottom:calc(60px + env(safe-area-inset-bottom));}
+  .wrap{max-width:760px;margin:0 auto;padding:0 max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left));}
+  header.hero{background:linear-gradient(180deg,var(--navy) 0%,var(--navy-deep) 100%);border-bottom:1px solid var(--line);padding:max(24px, env(safe-area-inset-top)) 18px 20px;text-align:center;}
+  button, input, select, textarea{font-family:inherit;}
+  button:focus-visible, .tab:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{outline:2px solid var(--gold-text);outline-offset:2px;}
+  @media (prefers-reduced-motion: no-preference){
+    .btn:active, .btn-sm:active, .mode-btn:active, .tab:active, .meal-item .check:active{transform:scale(0.96);}
+  }
+  .eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-text);font-weight:600;margin-bottom:6px;}
+  h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(26px,6vw,38px);margin:0 0 4px;letter-spacing:.01em;color:var(--ink);}
+  .sub{color:var(--ink-mute);font-size:14px;max-width:500px;margin:0 auto;}
+
+  .status-card{background:var(--slate);border:1px solid var(--line);border-radius:14px;padding:16px;margin:14px auto 0;max-width:520px;text-align:center;}
+  .status-card .status-icon{font-size:2.5rem;display:block;margin-bottom:4px;}
+  .status-card .status-text{font-weight:700;font-size:1.1rem;}
+  .status-card .status-sub{font-size:0.85rem;color:var(--ink-mute);}
+  .status-green .status-text{color:var(--green-text);}
+  .status-orange .status-text{color:var(--orange-text);}
+  .status-red .status-text{color:var(--red-text);}
+
+  .mode-selector{display:flex;gap:6px;justify-content:flex-start;margin:14px auto 0;max-width:600px;background:rgba(255,255,255,0.04);padding:4px;border-radius:40px;border:1px solid var(--line);flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .mode-selector::-webkit-scrollbar{display:none;}
+  .mode-btn{flex:0 0 auto;border:none;background:transparent;color:var(--ink-mute);padding:9px 12px;min-height:38px;border-radius:30px;font-size:0.7rem;font-weight:700;cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+  .mode-btn.active{background:linear-gradient(120deg,var(--gold),var(--gold-dim));color:var(--on-accent);}
+  .mode-btn.vacances{background:rgba(245,158,11,0.15);color:var(--orange-text);border:1px solid var(--orange-text);}
+  .mode-btn.vacances.active{background:linear-gradient(120deg,var(--orange),#d97706);color:var(--on-accent);}
+  .mode-btn.recuperation{background:rgba(126,174,126,0.15);color:var(--green-text);border:1px solid var(--green-text);}
+  .mode-btn.recuperation.active{background:linear-gradient(120deg,var(--green),#4c684c);color:var(--on-accent);}
+
+
+  .control-stack{max-width:640px;margin:14px auto 0;display:grid;gap:8px;text-align:left;}
+  .control-row{background:rgba(255,255,255,0.04);border:1px solid var(--line);border-radius:14px;padding:9px 10px;min-width:0;width:100%;}
+  .control-label{font-size:0.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-mute);font-weight:700;margin-bottom:6px;}
+  .goal-badge{display:flex;align-items:center;justify-content:space-between;gap:6px 10px;color:var(--ink);font-weight:700;font-size:.82rem;flex-wrap:wrap;min-width:0;}
+  .goal-badge span:last-child{color:var(--gold-text);font-size:.72rem;}
+  .choice-group{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .choice-group::-webkit-scrollbar{display:none;}
+  .choice-btn{flex:0 0 auto;border:1px solid var(--line);background:var(--slate);color:var(--ink-mute);padding:8px 12px;min-height:38px;border-radius:20px;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .choice-btn.active{background:linear-gradient(120deg,var(--gold),var(--gold-dim));color:var(--on-accent);border-color:transparent;}
+  .trend-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px;}
+  .trend-item{background:var(--navy);border:1px solid var(--line);border-radius:10px;padding:9px;}
+  .trend-item .trend-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);}
+  .trend-item .trend-value{font-size:.9rem;font-weight:700;color:var(--gold-text);margin-top:2px;}
+  .trajectory-box{margin-top:10px;padding:10px 12px;border-radius:10px;border-left:3px solid var(--gold-text);background:var(--navy);font-size:.82rem;color:var(--ink-mute);}
+  .trajectory-box strong{color:var(--ink);}
+  .program-note{font-size:.76rem;color:var(--ink-mute);line-height:1.45;}
+
+  nav.tabs{display:flex;overflow-x:auto;gap:6px;padding:16px 0 4px;max-width:760px;margin:0 auto;-webkit-overflow-scrolling:touch;}
+  nav.tabs .tab{flex:0 0 auto;font-size:12.5px;color:var(--ink-mute);background:var(--slate);border:1px solid var(--line);padding:9px 14px;min-height:38px;border-radius:20px;text-decoration:none;white-space:nowrap;cursor:pointer;border:none;font-weight:600;}
+  nav.tabs .tab.active{color:var(--gold-text);border-color:var(--gold-dim);}
+
+  .card{background:var(--slate);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:16px;}
+  .card h2{font-family:Georgia,serif;font-size:1.1rem;margin:0 0 8px;color:var(--gold-text);}
+  .card h3{font-size:1rem;margin:0 0 6px;color:var(--ink);}
+
+  .btn{background:var(--gold);color:var(--on-accent);border:none;padding:10px 16px;min-height:40px;border-radius:30px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:0.2s;}
+  .btn:hover{background:var(--gold-dim);}
+  .btn-sm{padding:7px 14px;min-height:34px;font-size:0.72rem;border-radius:30px;border:none;cursor:pointer;font-weight:700;transition:0.2s;}
+  .btn-sm.gold{background:var(--gold);color:var(--on-accent);}
+  .btn-sm.danger{background:var(--danger);color:var(--on-accent);}
+  .btn-sm.slate{background:var(--slate-light);color:var(--ink-mute);border:1px solid var(--line);}
+  .btn-sm.green{background:var(--green);color:var(--on-accent);}
+  .btn-sm.orange{background:var(--orange);color:var(--on-accent);}
+  .btn-sm.pink{background:var(--pink);color:var(--on-accent);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;}
+  .stat{background:var(--navy);border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;}
+  .stat .v{font-size:15px;font-weight:700;color:var(--gold-text);}
+  .stat .l{font-size:9px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.04em;margin-top:1px;}
+
+  .log-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .log-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .log-table th{text-align:left;padding:6px 4px;border-bottom:2px solid var(--line);color:var(--ink-mute);font-size:10px;text-transform:uppercase;}
+  .log-table td{padding:5px 4px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  .log-table input{background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:6px;color:var(--ink);font-size:16px;width:100%;min-width:64px;}
+  .log-table .actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .log-table .btn-sm{min-height:36px;padding:6px 12px;}
+
+  .food-tag{display:inline-flex;align-items:center;gap:6px;background:var(--navy);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:0.75rem;color:var(--ink-mute);margin:3px 4px 3px 0;}
+  .food-tag .remove{cursor:pointer;color:var(--danger-text);font-weight:700;}
+  .food-tag.forbidden{background:rgba(226,84,90,0.15);border-color:var(--danger-text);color:var(--danger-text);}
+  .food-tag.recipe{background:rgba(201,162,74,0.15);border-color:var(--gold-text);color:var(--gold-text);}
+  .food-tag.vitamine{background:rgba(126,174,126,0.15);border-color:var(--green-text);color:var(--green-text);}
+
+  .add-food-grid{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0;}
+  .add-food-grid input, .add-food-grid select{background:var(--navy);border:1px solid var(--line);border-radius:8px;padding:10px;color:var(--ink);font-size:16px;flex:1;min-width:100px;min-height:40px;}
+  .add-food-grid input:focus, .add-food-grid select:focus{outline:none;border-color:var(--gold-text);box-shadow:0 0 0 2px rgba(201,162,74,0.35);}
+
+  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;}
+  .chart-box{background:var(--navy);border:1px solid var(--line);border-radius:10px;padding:8px 6px;}
+  .chart-box h4{font-size:0.7rem;text-align:center;color:var(--ink-mute);margin:0 0 4px;text-transform:uppercase;letter-spacing:.04em;}
+  .chart-box svg{width:100%;height:auto;display:block;border-radius:4px;}
+  .chart-legend{display:flex;gap:12px;justify-content:center;margin-top:6px;font-size:0.7rem;color:var(--ink-mute);flex-wrap:wrap;}
+  .chart-legend span{display:flex;align-items:center;gap:4px;}
+  .chart-legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+  .empty-chart{text-align:center;padding:16px 4px;color:var(--ink-mute);font-size:0.75rem;}
+
+  .meal-item{background:var(--navy);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;cursor:pointer;}
+  .meal-item.done{opacity:0.5;}
+  .meal-item .head{display:flex;justify-content:space-between;align-items:flex-start;}
+  .meal-item .head strong{color:var(--ink);}
+  .meal-item .head .time{color:var(--ink-mute);font-size:0.8rem;}
+  .meal-item .check{cursor:pointer;background:transparent;border:1.5px solid var(--line);border-radius:6px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;font-size:1rem;}
+  .meal-item .check.done{background:var(--gold);}
+
+  .reset-btn{margin-left:10px;}
+  .cycle-checkbox{accent-color:var(--gold-text);width:20px;height:20px;cursor:pointer;margin-right:6px;flex:0 0 auto;}
+  .cycle-check-label{font-size:0.8rem;color:var(--ink-mute);cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 0;min-height:36px;}
+
+  .warmup-box{background:rgba(201,162,74,0.08);border-left:3px solid var(--gold-text);padding:6px 10px;border-radius:4px;margin:6px 0 10px;}
+  .warmup-box h4{font-size:0.75rem;color:var(--gold-text);margin:0 0 4px;text-transform:uppercase;letter-spacing:.04em;}
+  .warmup-box ul{list-style:none;padding:0;margin:0;}
+  .warmup-box li{font-size:0.75rem;color:var(--ink-mute);padding:2px 0;display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);}
+  .warmup-box li:last-child{border-bottom:none;}
+
+  .tempo-legend{font-size:0.7rem;color:var(--ink-mute);padding:6px 10px;background:var(--navy);border-radius:6px;margin-top:10px;border-left:3px solid var(--gold-text);}
+  .tempo-legend strong{color:var(--gold-text);}
+
+  .instructions{margin-top:20px;padding:16px;background:var(--navy);border:1px solid var(--line);border-radius:14px;font-size:0.85rem;color:var(--ink-mute);}
+  .instructions h3{color:var(--gold-text);font-family:Georgia,serif;margin:0 0 8px;}
+  .instructions ul{margin:0;padding-left:20px;}
+  .instructions li{margin-bottom:4px;}
+
+  .tension-input{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;}
+  .tension-input label{font-size:0.85rem;color:var(--ink-mute);}
+  .tension-input input{background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:8px;color:var(--ink);font-size:16px;width:66px;min-height:40px;}
+  .tension-input .btn{font-size:0.75rem;padding:8px 14px;min-height:38px;}
+
+  .hydration-card{background:rgba(0,230,184,0.04);border-left:3px solid var(--neon, #00e6b8);padding:10px 12px;border-radius:6px;margin:8px 0;}
+  .hydration-card h4{color:var(--neon, #00e6b8);margin:0 0 4px;font-size:0.85rem;}
+
+  .heat-warning{background:rgba(245,158,11,0.08);border-left:3px solid var(--orange-text);padding:8px 12px;border-radius:6px;margin:8px 0;color:var(--orange-text);}
+  .sun-alert{background:rgba(245,158,11,0.08);border-left:3px solid var(--orange-text);padding:8px 12px;border-radius:6px;margin:8px 0;color:var(--orange-text);display:none;}
+  .sun-alert .title{font-weight:700;color:var(--orange-text);}
+
+  .potassium-gauge{height:8px;border-radius:6px;background:var(--navy);border:1px solid var(--line);overflow:hidden;margin:4px 0;}
+  .potassium-gauge .fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--orange),var(--green));transition:width 0.5s;}
+
+  .recipe-card{background:var(--navy);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+  .recipe-card .info{flex:1;}
+  .recipe-card .info strong{color:var(--gold-text);}
+  .recipe-card .info .sub{font-size:0.75rem;color:var(--ink-mute);}
+  .recipe-card .actions{display:flex;gap:6px;flex-wrap:wrap;}
+
+  .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.6rem;font-weight:700;text-transform:uppercase;}
+  .badge.postworkout{background:var(--green);color:var(--on-accent);}
+  .badge.smoothie{background:var(--pink);color:var(--on-accent);}
+  .badge.proteine{background:var(--orange);color:var(--on-accent);}
+  .badge.recup{background:var(--gold);color:var(--on-accent);}
+
+  .perf-select{background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:2px 4px;font-size:0.7rem;color:var(--ink);min-height:24px;}
+  .perf-btn{padding:2px 8px;font-size:0.6rem;min-height:24px;border-radius:12px;border:none;cursor:pointer;background:var(--gold);color:var(--on-accent);font-weight:700;}
+
+  @media (max-width:480px){.stat-grid{grid-template-columns:repeat(2,1fr);}.chart-grid{grid-template-columns:1fr;}.trend-grid{grid-template-columns:1fr 1fr;}.tension-input{flex-direction:column;align-items:stretch;}.mode-btn{font-size:0.6rem;padding:6px 8px;}.control-stack{gap:6px;}}
+</style>
+
+<!-- PWA -->
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0a1420">
+<meta name="application-name" content="Phase60Plus">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+
+</head>
+<body>
+<script type="application/json" id="food-db-data">[{"name":"Banane","kcal":89,"p":1.1,"c":22.8,"f":0.3,"type":"fruit","potassium":358,"sodium":1,"glycemic_index":51,"season":"toute_annee","forbidden":false},{"name":"Avocat","kcal":160,"p":2,"c":8.5,"f":14.7,"type":"legume","potassium":485,"sodium":7,"glycemic_index":10,"season":"toute_annee","forbidden":false},{"name":"Melon","kcal":34,"p":0.8,"c":8.2,"f":0.2,"type":"fruit","potassium":267,"sodium":16,"glycemic_index":65,"season":"été","forbidden":false},{"name":"Pastèque","kcal":30,"p":0.6,"c":7.6,"f":0.2,"type":"fruit","potassium":112,"sodium":1,"glycemic_index":72,"season":"été","forbidden":false},{"name":"Cerises noires","kcal":63,"p":1.1,"c":16,"f":0.2,"type":"fruit","potassium":222,"sodium":0,"glycemic_index":22,"season":"été","forbidden":false},{"name":"Fraises","kcal":32,"p":0.7,"c":7.7,"f":0.3,"type":"fruit","potassium":153,"sodium":1,"glycemic_index":40,"season":"printemps-été","forbidden":false},{"name":"Myrtilles","kcal":57,"p":0.7,"c":14.5,"f":0.3,"type":"fruit","potassium":77,"sodium":1,"glycemic_index":53,"season":"été","forbidden":false},{"name":"Pomme","kcal":52,"p":0.3,"c":14,"f":0.2,"type":"fruit","potassium":107,"sodium":1,"glycemic_index":38,"season":"automne","forbidden":false},{"name":"Abricots","kcal":48,"p":1.4,"c":11.1,"f":0.4,"type":"fruit","potassium":259,"sodium":1,"glycemic_index":57,"season":"été","forbidden":false},{"name":"Patate douce (cuite)","kcal":86,"p":1.6,"c":20.1,"f":0.1,"type":"legume","potassium":337,"sodium":55,"glycemic_index":63,"season":"automne","forbidden":false},{"name":"Épinards (cuits)","kcal":23,"p":2.9,"c":3.6,"f":0.4,"type":"legume","potassium":466,"sodium":70,"glycemic_index":15,"season":"toute_annee","forbidden":false},{"name":"Brocolis (cuits)","kcal":35,"p":2.4,"c":7.2,"f":0.4,"type":"legume","potassium":293,"sodium":33,"glycemic_index":15,"season":"hiver","forbidden":false},{"name":"Haricots verts","kcal":31,"p":1.8,"c":7.1,"f":0.1,"type":"legume","potassium":211,"sodium":6,"glycemic_index":15,"season":"été","forbidden":false},{"name":"Courgettes","kcal":17,"p":1.2,"c":3.1,"f":0.3,"type":"legume","potassium":264,"sodium":8,"glycemic_index":15,"season":"été","forbidden":false},{"name":"Cabillaud","kcal":82,"p":18,"c":0,"f":0.7,"type":"poisson","potassium":413,"sodium":60,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Saumon","kcal":208,"p":22,"c":0,"f":13,"type":"poisson","potassium":363,"sodium":50,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Blanc poulet","kcal":165,"p":31,"c":0,"f":3.6,"type":"viande","potassium":256,"sodium":70,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Dinde","kcal":135,"p":29,"c":0,"f":2,"type":"viande","potassium":239,"sodium":60,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Œufs entiers","kcal":143,"p":12.6,"c":0.7,"f":9.5,"type":"oeuf","potassium":69,"sodium":140,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Blancs d'œufs","kcal":52,"p":10.9,"c":0.7,"f":0.2,"type":"oeuf","potassium":163,"sodium":160,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Skyr nature","kcal":60,"p":10,"c":3.5,"f":0.2,"type":"fromage","potassium":150,"sodium":40,"glycemic_index":35,"season":"toute_annee","forbidden":false},{"name":"Fromage blanc 0%","kcal":50,"p":7.5,"c":4,"f":0.2,"type":"fromage","potassium":80,"sodium":40,"glycemic_index":32,"season":"toute_annee","forbidden":false},{"name":"Mozzarella (vache)","kcal":280,"p":18,"c":1.5,"f":22,"type":"fromage","potassium":95,"sodium":600,"glycemic_index":null,"season":"toute_annee","forbidden":true},{"name":"Feta","kcal":264,"p":14.2,"c":4.1,"f":21.3,"type":"fromage","potassium":62,"sodium":1100,"glycemic_index":null,"season":"toute_annee","forbidden":true},{"name":"Parmesan","kcal":431,"p":35.8,"c":3.2,"f":29.7,"type":"fromage","potassium":92,"sodium":1600,"glycemic_index":null,"season":"toute_annee","forbidden":true},{"name":"Charcuterie (jambon, salami)","kcal":250,"p":20,"c":0,"f":18,"type":"charcuterie","potassium":250,"sodium":1200,"glycemic_index":null,"season":"toute_annee","forbidden":true},{"name":"Sauce soja","kcal":60,"p":5,"c":8,"f":0,"type":"condiment","potassium":450,"sodium":5500,"glycemic_index":null,"season":"toute_annee","forbidden":true},{"name":"Bouillon cube","kcal":10,"p":0.5,"c":1,"f":0,"type":"condiment","potassium":50,"sodium":900,"glycemic_index":null,"season":"toute_annee","forbidden":true},{"name":"Sel de table","kcal":0,"p":0,"c":0,"f":0,"type":"condiment","potassium":0,"sodium":38000,"glycemic_index":null,"season":"toute_annee","forbidden":true},{"name":"Flocons d'avoine","kcal":367,"p":12,"c":61,"f":6,"type":"cereale","potassium":362,"sodium":2,"glycemic_index":55,"season":"toute_annee","forbidden":false},{"name":"Riz basmati (cuit)","kcal":130,"p":2.7,"c":28,"f":0.3,"type":"cereale","potassium":48,"sodium":1,"glycemic_index":58,"season":"toute_annee","forbidden":false},{"name":"Riz complet (cuit)","kcal":111,"p":2.6,"c":23,"f":0.9,"type":"cereale","potassium":77,"sodium":1,"glycemic_index":50,"season":"toute_annee","forbidden":false},{"name":"Quinoa (cuit)","kcal":120,"p":4.4,"c":21.3,"f":1.9,"type":"cereale","potassium":172,"sodium":5,"glycemic_index":53,"season":"toute_annee","forbidden":false},{"name":"Pain complet","kcal":230,"p":8,"c":42,"f":2,"type":"pain","potassium":140,"sodium":400,"glycemic_index":65,"season":"toute_annee","forbidden":false},{"name":"Huile d'olive","kcal":884,"p":0,"c":0,"f":100,"type":"matiere_grasse","potassium":0,"sodium":0,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Beurre","kcal":717,"p":0.9,"c":0,"f":81,"type":"matiere_grasse","potassium":0,"sodium":800,"glycemic_index":null,"season":"toute_annee","forbidden":true},{"name":"Amandes","kcal":579,"p":21.2,"c":21.7,"f":49.9,"type":"oleagineux","potassium":733,"sodium":1,"glycemic_index":15,"season":"toute_annee","forbidden":false},{"name":"Beurre de cacahuète (pur)","kcal":588,"p":25,"c":20,"f":50,"type":"oleagineux","potassium":558,"sodium":5,"glycemic_index":14,"season":"toute_annee","forbidden":false},{"name":"Miel","kcal":304,"p":0.3,"c":82.4,"f":0,"type":"sucre","potassium":52,"sodium":4,"glycemic_index":61,"season":"toute_annee","forbidden":false},{"name":"Chocolat noir 70%","kcal":550,"p":7.8,"c":45,"f":38,"type":"sucre","potassium":700,"sodium":11,"glycemic_index":23,"season":"toute_annee","forbidden":false},{"name":"Whey vanille","kcal":110,"p":24,"c":2,"f":1,"type":"complement","potassium":60,"sodium":50,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Whey neutre","kcal":105,"p":25,"c":1,"f":0.5,"type":"complement","potassium":55,"sodium":45,"glycemic_index":null,"season":"toute_annee","forbidden":false},{"name":"Smoothie Pastèque-Basilic (recette)","kcal":330,"p":35,"c":26,"f":2.5,"type":"recette","potassium":460,"sodium":42,"forbidden":false,"tags":["post-workout","smoothie","proteine"],"ingredients":[{"name":"Pastèque","quantity":200,"unit":"g"},{"name":"Skyr nature","quantity":150,"unit":"g"},{"name":"Whey vanille","quantity":30,"unit":"g"},{"name":"Citron vert","quantity":0.5,"unit":"pièce"}]},{"name":"Smoothie Bowl Pastèque-Basilic (recette)","kcal":380,"p":28,"c":38,"f":12,"type":"recette","potassium":520,"sodium":48,"forbidden":false,"tags":["post-workout","smoothie","proteine","bowl"],"ingredients":[{"name":"Pastèque","quantity":200,"unit":"g"},{"name":"Skyr nature","quantity":150,"unit":"g"},{"name":"Amandes","quantity":15,"unit":"g"},{"name":"Citron vert","quantity":0.5,"unit":"pièce"}]},{"name":"Smoothie Pastèque-Coco (recette)","kcal":290,"p":22,"c":30,"f":8,"type":"recette","potassium":380,"sodium":35,"forbidden":false,"tags":["post-workout","smoothie"],"ingredients":[{"name":"Pastèque","quantity":200,"unit":"g"},{"name":"Skyr nature","quantity":150,"unit":"g"},{"name":"Lait de coco","quantity":50,"unit":"ml"}]},{"name":"Smoothie Pastèque-Gingembre (recette)","kcal":320,"p":28,"c":32,"f":2,"type":"recette","potassium":490,"sodium":40,"forbidden":false,"tags":["post-workout","smoothie","proteine"],"ingredients":[{"name":"Pastèque","quantity":200,"unit":"g"},{"name":"Skyr nature","quantity":150,"unit":"g"},{"name":"Whey vanille","quantity":30,"unit":"g"},{"name":"Citron vert","quantity":0.5,"unit":"pièce"}]}]</script>
+<script type="application/json" id="exercises-balanced-data">{"lundi":[{"name":"Développé couché","sets":3,"reps":"8-10","tempo":"2-1-1","rest_between_sets":"2 min","rest_between_exercises":"2.5 min","charge":"charge_dc_plat"},{"name":"Rowing barre / haltères","sets":4,"reps":"8-12","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_sdt"},{"name":"Développé épaules haltères","sets":3,"reps":"8-12","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_incline_halteres"},{"name":"Face pull TRX","sets":3,"reps":"15-20","tempo":"—","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null},{"name":"Curl + extension triceps","sets":2,"reps":"10-15","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null}],"mardi":[{"name":"Squat","sets":3,"reps":"8-12","tempo":"3-1-1","rest_between_sets":"2 min","rest_between_exercises":"2.5 min","charge":"charge_squat"},{"name":"Soulevé de terre roumain","sets":3,"reps":"8-12","tempo":"3-1-1","rest_between_sets":"2 min","rest_between_exercises":"2.5 min","charge":"charge_sdt"},{"name":"Fentes arrière","sets":2,"reps":"10/jambe","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_ecartes"},{"name":"Mollets debout","sets":3,"reps":"12-20","tempo":"2-1-2","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null},{"name":"Équilibre unipodal","sets":3,"reps":"30-45 sec/jambe","tempo":"—","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null},{"name":"Gainage","sets":3,"reps":"30-45 sec","tempo":"—","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null}],"mercredi":[{"name":"Cardio zone modérée / marche","sets":1,"reps":"30-45 min","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null},{"name":"Mobilité hanches / épaules","sets":1,"reps":"10-15 min","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null}],"jeudi":[{"name":"Squat léger","sets":3,"reps":"10-12","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_squat"},{"name":"Développé incliné haltères","sets":3,"reps":"10-12","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_incline_halteres"},{"name":"Rowing TRX / haltère","sets":3,"reps":"10-15","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_ecartes"},{"name":"SDT roumain léger","sets":2,"reps":"10-12","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_sdt"},{"name":"Pallof press / anti-rotation","sets":3,"reps":"10-12/côté","tempo":"2-1-2","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null}],"vendredi":[{"name":"Mobilité générale","sets":1,"reps":"10 min","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null},{"name":"Élévations latérales","sets":3,"reps":"12-15","tempo":"2-1-2","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null},{"name":"Curl biceps","sets":3,"reps":"10-15","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null},{"name":"Extensions triceps","sets":3,"reps":"10-15","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null},{"name":"Face pull TRX","sets":2,"reps":"15-20","tempo":"—","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null}],"samedi":[{"name":"VTT / Cardio","sets":1,"reps":"45-90 min selon récupération","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null},{"name":"Gainage optionnel","sets":2,"reps":"30-45 sec","tempo":"—","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":null}],"dimanche":[{"name":"Repos / marche facile","sets":1,"reps":"20-30 min optionnel","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null},{"name":"Étirements confort","sets":1,"reps":"10 min","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null}]}</script>
+<script type="application/json" id="exercises-upper-data">{"lundi":[{"name":"Développé couché","sets":4,"reps":"6-10","tempo":"2-1-1","rest_between_sets":"2 min","rest_between_exercises":"2.5 min","charge":"charge_dc_plat"},{"name":"Développé incliné haltères","sets":3,"reps":"8-12","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_incline_halteres"},{"name":"Rowing barre / haltères","sets":3,"reps":"8-12","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_sdt"},{"name":"Écartés haltères","sets":2,"reps":"12-15","tempo":"3-1-1","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":"charge_ecartes"},{"name":"Extension triceps","sets":2,"reps":"10-15","tempo":"3-1-1","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":"charge_triceps"}],"mardi":[{"name":"Squat","sets":3,"reps":"8-12","tempo":"3-1-1","rest_between_sets":"2 min","rest_between_exercises":"2.5 min","charge":"charge_squat"},{"name":"Soulevé de terre roumain","sets":3,"reps":"8-12","tempo":"3-1-1","rest_between_sets":"2 min","rest_between_exercises":"2.5 min","charge":"charge_sdt"},{"name":"Fentes arrière","sets":2,"reps":"10/jambe","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_ecartes"},{"name":"Élévations latérales","sets":3,"reps":"12-20","tempo":"2-1-2","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":null},{"name":"Curl biceps","sets":3,"reps":"8-12","tempo":"3-1-1","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":"charge_biceps"}],"mercredi":[{"name":"Marche / cardio modéré","sets":1,"reps":"30-45 min","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null},{"name":"Mobilité hanches / épaules","sets":1,"reps":"10-15 min","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null}],"jeudi":[{"name":"Développé incliné haltères","sets":3,"reps":"8-12","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_incline_halteres"},{"name":"Développé couché léger","sets":2,"reps":"10-12","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_dc_plat"},{"name":"Rowing TRX / haltère","sets":3,"reps":"10-15","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_sdt"},{"name":"Écartés haltères","sets":2,"reps":"12-15","tempo":"3-1-1","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":"charge_ecartes"},{"name":"Face pull TRX","sets":2,"reps":"15-20","tempo":"2-1-2","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":null},{"name":"Curl biceps","sets":2,"reps":"10-15","tempo":"3-1-1","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":"charge_biceps"},{"name":"Extension triceps","sets":2,"reps":"10-15","tempo":"3-1-1","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":"charge_triceps"}],"vendredi":[{"name":"Squat léger","sets":3,"reps":"10-12","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_squat"},{"name":"SDT roumain léger","sets":2,"reps":"10-12","tempo":"3-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_sdt"},{"name":"Mollets debout","sets":3,"reps":"12-20","tempo":"2-1-2","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":null},{"name":"Développé épaules haltères","sets":3,"reps":"8-12","tempo":"2-1-1","rest_between_sets":"1.5 min","rest_between_exercises":"2 min","charge":"charge_epaules"},{"name":"Élévations latérales","sets":2,"reps":"12-20","tempo":"2-1-2","rest_between_sets":"1 min","rest_between_exercises":"1.5 min","charge":null}],"samedi":[{"name":"VTT / Cardio facile à modéré","sets":1,"reps":"45-75 min selon récupération","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null},{"name":"Mobilité optionnelle","sets":1,"reps":"10 min","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null}],"dimanche":[{"name":"Repos / marche facile","sets":1,"reps":"20-30 min optionnel","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null},{"name":"Étirements confort","sets":1,"reps":"10 min","tempo":"—","rest_between_sets":"—","rest_between_exercises":"—","charge":null}]}</script>
+<script type="application/json" id="warmups-data">{"lundi":[{"name":"Rotations externes","detail":"3×15 par bras"},{"name":"Pompes scapulaires","detail":"2×10"},{"name":"Mobilisation épaules","detail":"2×8"},{"name":"Chest stretch","detail":"30 sec/côté"},{"name":"Rotations poignets","detail":"2×10"},{"name":"Gainage léger","detail":"2×30 sec"}],"mardi":[{"name":"Flexions genoux","detail":"2×10"},{"name":"Roue de bicyclette","detail":"2×10/jambe"},{"name":"Fentes statiques","detail":"2×8/jambe"},{"name":"Mollets","detail":"2×15"},{"name":"Rotations chevilles","detail":"2×10"},{"name":"Gainage","detail":"2×30 sec"}],"mercredi":[{"name":"Rotations cou","detail":"2×8"},{"name":"Cercles épaules","detail":"2×10"},{"name":"Mobilisation dos","detail":"2×10"},{"name":"Étirement bras croisés","detail":"30 sec/côté"}],"jeudi":[{"name":"Rotations externes","detail":"3×15 par bras"},{"name":"Pompes scapulaires","detail":"2×10"},{"name":"Mobilisation épaules","detail":"2×8"},{"name":"Chest stretch","detail":"30 sec/côté"},{"name":"Rotations poignets","detail":"2×10"},{"name":"Gainage léger","detail":"2×30 sec"}],"vendredi":[{"name":"Rotations externes","detail":"3×15 par bras"},{"name":"Pompes scapulaires","detail":"2×10"},{"name":"Mobilisation épaules","detail":"2×8"},{"name":"Chest stretch","detail":"30 sec/côté"},{"name":"Rotations poignets","detail":"2×10"},{"name":"Gainage léger","detail":"2×30 sec"}],"samedi":[{"name":"VTT : 5-10 min lent","detail":""},{"name":"Flexions genoux","detail":"2×10"},{"name":"Mobilisation hanches","detail":"2×10"},{"name":"Rotations poignets","detail":"2×10"},{"name":"Gainage","detail":"2×30 sec"}],"dimanche":[{"name":"Marche 10 min","detail":""},{"name":"Étirements dynamiques","detail":"5 min"}]}</script>
+<script>
+  try {
+    if (localStorage.getItem('phase60_theme') === 'light') {
+      document.body.classList.add('light-theme');
+    }
+  } catch (e) {}
+</script>
+
+<header class="hero" style="position:relative;">
+  <button type="button" id="themeToggle" aria-label="Basculer le thème clair/sombre" style="position:absolute;top:max(12px, env(safe-area-inset-top));right:max(12px, env(safe-area-inset-right));background:var(--slate);border:1px solid var(--line);border-radius:50%;width:40px;height:40px;min-height:40px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">🌙</button>
+  <div class="eyebrow">Coach entraînement & récupération — 60+</div>
+  <h1>Phases <span style="color:var(--gold-text);">60+</span></h1>
+  <div class="sub" id="headerSub">V5.8 PWA — Construction musculaire</div>
+
+  <div class="status-card" id="statusCard">
+    <span class="status-icon" id="statusIcon">🟢</span>
+    <div class="status-text" id="statusText">Tous les modes autorisés</div>
+    <div class="status-sub" id="statusSub">Tension : 120/80 · Pouls : 72</div>
+  </div>
+
+  <div class="control-stack">
+    <div class="control-row">
+      <div class="control-label">Objectif principal</div>
+      <div class="goal-badge"><span>🏗️ Construction musculaire</span><span id="proteinGoalHeader">Protéines calculées au poids</span></div>
+    </div>
+    <div class="control-row">
+      <div class="control-label">Programme</div>
+      <div class="choice-group" id="programSelector">
+        <button class="choice-btn active" data-program="balanced">⚖️ Équilibré</button>
+        <button class="choice-btn" data-program="upper_focus">🎯 Upper Focus — Pectoraux</button>
+      </div>
+    </div>
+    <div class="control-row">
+      <div class="control-label">Mode du jour</div>
+      <div class="mode-selector" id="dayModeSelector" style="margin:0;max-width:none;">
+        <button class="mode-btn" data-mode="vtt"><span class="icon">🚵</span>VTT</button>
+        <button class="mode-btn" data-mode="marche"><span class="icon">🐕</span>Marche</button>
+        <button class="mode-btn" data-mode="standard"><span class="icon">📌</span>Standard</button>
+        <button class="mode-btn vacances" data-mode="vacances"><span class="icon">🏖️</span>Vacances</button>
+        <button class="mode-btn recuperation" data-mode="recuperation"><span class="icon">🧘</span>Récupération</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-page="dashboard">📊 Accueil</button>
+  <button class="tab" data-page="nutrition">🥗 Nutrition</button>
+  <button class="tab" data-page="recettes">🍹 Recettes</button>
+  <button class="tab" data-page="respiration">🫁 Respiration</button>
+  <button class="tab" data-page="cycle">🔄 Cycle</button>
+  <button class="tab" data-page="suivi">📈 Suivi</button><button class="tab" data-page="profil">👤 Profil</button>
+</nav>
+
+<div class="wrap">
+
+  <!-- DASHBOARD -->
+  <section class="page" id="page-dashboard" style="display:block;">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="flex:1;">
+          <div style="font-size:1.3rem;font-weight:700;font-family:Georgia,serif;" id="dashDay">Lundi</div>
+          <div style="font-size:0.85rem;color:var(--gold-text);" id="dashSession">—</div>
+          <div style="font-size:0.8rem;color:var(--ink-mute);margin-top:4px;" id="dashKcal">0 / 0 kcal</div>
+        </div>
+        <div style="text-align:center;background:var(--navy);border-radius:50px;padding:6px 14px;border:1px solid var(--line);">
+          <div style="font-size:1.4rem;font-weight:700;color:var(--gold-text);" id="dashPct">0%</div>
+          <div style="font-size:0.6rem;color:var(--ink-mute);">calories</div>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><div class="v" id="dashP">0g</div><div class="l">Protéines</div></div>
+        <div class="stat"><div class="v" id="dashC">0g</div><div class="l">Glucides</div></div>
+        <div class="stat"><div class="v" id="dashF">0g</div><div class="l">Lipides</div></div>
+        <div class="stat"><div class="v" id="dashK">0mg</div><div class="l">Potassium</div></div>
+      </div>
+      <div style="font-size:0.7rem;color:var(--ink-mute);margin-top:6px;" id="dashExtrasNote"></div>
+      <div style="font-size:0.7rem;color:var(--green-text);margin-top:4px;" id="vitamineDDisplay">💊 Vitamine D3 : ⚪ Non prise</div>
+    </div>
+
+    <div class="card" id="muscleDashboardCard">
+      <h2>🏗️ Construction musculaire</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="v" id="muscleProteinTarget">—</div><div class="l">Protéines / jour</div></div>
+        <div class="stat"><div class="v" id="muscleWeight7">—</div><div class="l">Poids moy. 7 j</div></div>
+        <div class="stat"><div class="v" id="muscleWeight14">—</div><div class="l">Poids moy. 14 j</div></div>
+        <div class="stat"><div class="v" id="muscleRecoveryScore">—</div><div class="l">Récupération</div></div>
+      </div>
+      <div class="trajectory-box" id="muscleTrajectory">Ajoutez des mesures régulières pour analyser la trajectoire.</div>
+    </div>
+
+    <div class="card" id="chestPriorityCard">
+      <h2>🎯 Priorité pectoraux</h2>
+      <div id="chestPriorityContent" class="program-note">Le contenu dépend du programme sélectionné.</div>
+    </div>
+
+    <div id="heatWarning" class="heat-warning" style="display:none;">
+      🔥 <strong>Chaleur élevée (>28°C)</strong> — Attention à l'hydratation. Évitez l'effort entre 12h et 16h.
+    </div>
+
+    <div id="sunAlert" class="sun-alert" style="display:none;">
+      <div class="title">☀️ ALERTE BRONZAGE + TENSION</div>
+      <div id="sunAlertMsg">Exposition solaire prolongée associée à une tension élevée. Hydratez-vous et reposez-vous.</div>
+    </div>
+
+    <div class="card">
+      <h2>📊 Tension & Hydratation</h2>
+      <div class="tension-input">
+        <label>SYS :</label>
+        <input type="number" id="sysInput" placeholder="120" value="120" inputmode="numeric" style="width:68px;">
+        <label>DIA :</label>
+        <input type="number" id="diaInput" placeholder="80" value="80" inputmode="numeric" style="width:68px;">
+        <label>Pouls :</label>
+        <input type="number" id="pulseInput" placeholder="72" value="72" inputmode="numeric" style="width:68px;">
+        <label>☀️ Heures :</label>
+        <input type="number" id="sunInput" placeholder="0" value="0" step="0.5" inputmode="decimal" style="width:60px;">
+        <button class="btn-sm gold" onclick="updateTension()">✅ Enregistrer</button>
+        <span style="font-size:0.7rem;color:var(--ink-mute);margin-left:4px;" id="tensionStatus">120/80 · OK</span>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
+        <div style="flex:1;background:var(--navy);border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:0.7rem;color:var(--ink-mute);">Poids pré-séance (kg)</div>
+          <input type="number" step="0.1" id="preWeight" placeholder="83.5" inputmode="decimal" style="background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:16px;color:var(--ink);width:84px;min-height:40px;text-align:center;">
+        </div>
+        <div style="flex:1;background:var(--navy);border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:0.7rem;color:var(--ink-mute);">Poids post-séance (kg)</div>
+          <input type="number" step="0.1" id="postWeight" placeholder="83.0" inputmode="decimal" style="background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:16px;color:var(--ink);width:84px;min-height:40px;text-align:center;">
+        </div>
+        <button class="btn-sm gold" onclick="updateHydration()">💧 Calculer</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;background:var(--navy);border-radius:8px;padding:8px;">
+        <label style="font-size:0.7rem;color:var(--ink-mute);flex:1;">🌡️ Température extérieure (°C)</label>
+        <input type="number" step="0.5" id="tempInput" placeholder="24" value="24" inputmode="decimal" style="width:74px;background:var(--navy-deep);border:1px solid var(--line);border-radius:6px;padding:8px 6px;font-size:16px;color:var(--ink);min-height:40px;text-align:center;">
+        <button class="btn-sm gold" onclick="updateTemperature()">✅</button>
+      </div>
+      <div id="hydrationAdvice" class="hydration-card" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>🧠 État du Jour</h2>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--ink-mute);">
+            <label for="fatigueInput">😴 Fatigue ressentie</label><span id="fatigueVal">5/10</span>
+          </div>
+          <input type="range" id="fatigueInput" min="1" max="10" value="5" step="1" style="width:100%;accent-color:var(--gold);">
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--ink-mute);">
+            <label for="sleepInput">🌙 Qualité du sommeil</label><span id="sleepVal">5/10</span>
+          </div>
+          <input type="range" id="sleepInput" min="1" max="10" value="5" step="1" style="width:100%;accent-color:var(--gold);">
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--ink-mute);">
+            <label for="stressInput">😰 Stress perçu</label><span id="stressVal">5/10</span>
+          </div>
+          <input type="range" id="stressInput" min="1" max="10" value="5" step="1" style="width:100%;accent-color:var(--gold);">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label for="bedtimeInput" style="font-size:0.8rem;color:var(--ink-mute);flex:1;">🛏️ Heure de coucher (hier soir)</label>
+          <input type="time" id="bedtimeInput" style="background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:16px;color:var(--ink);min-height:40px;">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-sm gold" onclick="updateDailyState()">✅ Enregistrer l'état</button>
+          <button class="btn-sm green" onclick="toggleVitaminD()">💊 Vitamine D3 prise</button>
+        </div>
+        <div id="dailyStateAlerts" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+    </div>
+
+    <div class="card" id="adaptiveCard">
+      <h2>🤖 Recommandation adaptative</h2>
+      <div id="adaptiveRecommendation" style="font-size:0.95rem;"></div>
+    </div>
+
+    <div class="card">
+      <h2>💧 Hydratation <span style="font-size:0.7rem;color:var(--ink-mute);">(objectif personnalisé)</span></h2>
+      <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--ink-mute);">
+        <span id="hydrationCurrent">0 ml</span>
+        <span id="hydrationTargetLabel">objectif</span>
+      </div>
+      <div class="potassium-gauge"><div id="hydrationFill" class="fill" style="width:0%;background:linear-gradient(90deg,#3a7bd5,#3ad5c8);"></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+        <button type="button" class="btn-sm slate" onclick="addHydration('water',250)">💧 +250ml eau</button>
+        <button type="button" class="btn-sm slate" onclick="addHydration('infusion',250)">🍵 +250ml infusion</button>
+        <input type="number" id="pastequeInput" placeholder="pastèque (g)" step="10" min="0" inputmode="decimal" style="width:110px;background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:16px;color:var(--ink);min-height:40px;">
+        <button type="button" class="btn-sm slate" onclick="addPasteque()">🍉 Ajouter</button>
+      </div>
+      <div id="hydrationDetail" style="font-size:0.7rem;color:var(--ink-mute);margin-top:6px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>🥑 Potassium <span id="potassiumTargetTitle" style="font-size:0.7rem;color:var(--ink-mute);">(objectif 3500 mg)</span></h2>
+      <div id="potassiumGaugeContainer">
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--ink-mute);">
+          <span id="potassiumCurrent">0 mg</span>
+          <span id="potassiumTarget">3500 mg</span>
+        </div>
+        <div class="potassium-gauge">
+          <div id="potassiumFill" class="fill" style="width:0%;"></div>
+        </div>
+        <div style="font-size:0.7rem;color:var(--ink-mute);margin-top:2px;" id="potassiumStatus">⚠️ Objectif non atteint</div>
+      </div>
+    </div>
+
+    <div class="card"><h2>✅ Checklist du jour</h2><div id="dashChecklist"></div></div>
+
+    <div class="card">
+      <h2>📏 Profil & repères</h2>
+      <div id="profileSummary" style="font-size:0.78rem;color:var(--ink-mute);margin-bottom:3px;">Profil enregistré : —</div>
+      <div id="profileTargetsSummary" style="font-size:0.7rem;color:var(--ink-mute);margin-bottom:8px;">Repères profil : —</div>
+      <div class="stat-grid">
+        <div class="stat"><div class="v" id="statWeight">—</div><div class="l">Poids</div></div>
+        <div class="stat"><div class="v" id="statWaist">—</div><div class="l">Taille</div></div>
+        <div class="stat"><div class="v" id="statChest">—</div><div class="l">Poitrine</div></div>
+        <div class="stat"><div class="v" id="statFat">—</div><div class="l">MG</div></div>
+        <div class="stat"><div class="v" id="statMuscle">—</div><div class="l">Muscle</div></div>
+        <div class="stat"><div class="v" id="statWater">—</div><div class="l">Eau</div></div>
+      </div>
+      <div id="repereSource" style="font-size:0.7rem;color:var(--ink-mute);margin-top:6px;">Les mesures affichées utilisent le dernier Suivi disponible ; le poids du Profil sert de repli.</div>
+      <div style="font-size:0.75rem;color:var(--ink-mute);margin-top:6px;">Objectifs : DIA &lt; 90 · taille contenue · progression DC · MG maîtrisée · hydratation corporelle stable</div>
+    </div>
+
+    <div class="card">
+      <h2>🏋️ Séance recommandée</h2>
+      <div id="recommendedSession" style="font-size:1rem;color:var(--gold-text);">
+        ✅ Marche ou VTT récupération (<14 km/h) recommandé aujourd'hui.
+      </div>
+      <div id="sessionLockMsg" style="font-size:0.85rem;color:var(--red-text);display:none;margin-top:6px;">
+        ⚠️ Prudence : recontrôler avant effort intense
+      </div>
+    </div>
+  </section>
+
+  <!-- NUTRITION -->
+  <section class="page" id="page-nutrition" style="display:none;">
+    <div class="card">
+      <h2>🥗 Plan alimentaire <button class="btn-sm gold reset-btn" onclick="resetWeek()">🔄 Réinitialiser</button></h2>
+      <div style="display:flex;gap:4px;overflow-x:auto;margin-bottom:10px;" id="dayTabs"></div>
+      <div id="nutDayHeader">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="font-size:1rem;margin:0;color:var(--ink);" id="nutDayTitle">Lundi</h3>
+          <span style="font-size:0.8rem;color:var(--ink-mute);" id="nutDayKcal">0 kcal</span>
+        </div>
+        <div style="height:5px;background:var(--navy);border-radius:4px;overflow:hidden;margin:4px 0;">
+          <div id="nutBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--gold-dim),var(--gold));transition:width 0.3s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
+          <span style="color:var(--ink-mute);">Consommé : <b id="nutEaten" style="color:var(--ink);">0</b> kcal</span>
+          <span style="color:var(--ink-mute);">Objectif : <b id="nutTarget" style="color:var(--ink);">0</b> kcal</span>
+        </div>
+        <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-top:6px;">
+          <div class="stat"><div class="v" id="nutP">0g</div><div class="l">Protéines</div></div>
+          <div class="stat"><div class="v" id="nutC">0g</div><div class="l">Glucides</div></div>
+          <div class="stat"><div class="v" id="nutF">0g</div><div class="l">Lipides</div></div>
+          <div class="stat"><div class="v" id="nutK">0mg</div><div class="l">Potassium</div></div>
+        </div>
+        <div style="font-size:0.7rem;color:var(--ink-mute);margin-top:4px;" id="nutExtrasNote"></div>
+        <div style="font-size:0.7rem;color:var(--good-text);margin-top:4px;" id="potassiumDisplay">🥑 Potassium : 0 mg / 3500 mg</div>
+        <div style="font-size:0.7rem;color:var(--green-text);margin-top:2px;" id="nutVitamineD">💊 Vitamine D3 : ⚪ Non prise</div>
+      </div>
+    </div>
+    <div id="mealsContainer"></div>
+
+    <div class="card">
+      <h2 style="font-size:1rem;">➕ Ajouts par date</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+          <button class="btn-sm slate" id="extraDatePrev">◀</button>
+          <input type="date" id="extraDate" style="background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:4px 6px;color:var(--ink);font-size:0.8rem;">
+          <button class="btn-sm slate" id="extraDateNext">▶</button>
+          <button class="btn-sm slate" id="extraDateToday">Aujourd'hui</button>
+        </div>
+        <span style="font-size:0.7rem;color:var(--ink-mute);" id="extraDateLabel"></span>
+      </div>
+      
+      <div style="margin-bottom:8px;background:var(--navy);border-radius:8px;padding:10px;border:1px dashed var(--gold-dim);">
+        <div style="font-size:0.8rem;color:var(--gold-text);font-weight:700;margin-bottom:6px;">🍹 Ajouter une recette en 1 clic :</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="quickRecipeButtons"></div>
+      </div>
+      
+      <div class="add-food-grid">
+        <input type="text" id="foodSearch" list="foodList" placeholder="Rechercher un aliment..." autocomplete="off">
+        <datalist id="foodList"></datalist>
+        <input type="number" id="foodQuantity" placeholder="g" step="5" min="5" value="100" inputmode="decimal">
+        <button class="btn" onclick="addExtraFood()">Ajouter</button>
+      </div>
+      <div id="extraFoodsList" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+      <div id="extraDayTotal" style="font-size:0.75rem;color:var(--ink-mute);margin-top:6px;"></div>
+      <div id="extraAdvice" style="margin-top:8px;background:rgba(201,162,74,0.08);border-left:3px solid var(--gold-text);padding:6px 10px;border-radius:4px;font-size:0.85rem;color:var(--ink-mute);display:none;"></div>
+      <div id="forbiddenAlert" style="margin-top:6px;font-size:0.8rem;color:var(--danger-text);display:none;"></div>
+    </div>
+
+    <div class="card">
+      <div style="background:rgba(201,162,74,0.06);border-left:3px solid var(--gold-text);padding:8px 12px;border-radius:4px;color:var(--ink-mute);font-size:0.85rem;">
+        <strong style="color:var(--gold-text);">🥣 Construction musculaire — repères nutritionnels :</strong><br>
+        • <span style="color:var(--green-text);">✅ Protéines : 1,6–2,0 g/kg/j</span> · cible de l’application : <strong id="nutritionProteinRule">1,8 g/kg/j</strong><br>
+        • <span style="color:var(--gold-text);">⚡ Énergie : surplus prudent, environ +150 à +250 kcal/j en moyenne</span>, ajusté selon la trajectoire 7/14 jours<br>
+        • <span style="color:var(--good-text);">✅ Potassium > 3500 mg/jour</span> (banane, avocat, patate douce, épinards, melon, pastèque)<br>
+        • <span style="color:var(--danger-text);">🧂 Sodium : objectif personnel (repère général < 2000 mg/jour)</span><br>
+        • <span style="color:var(--gold-text);">✅ Glucides de qualité</span> autour des besoins d’entraînement et de récupération<br>
+        • <span style="color:var(--gold-text);">💊 Supplément personnalisé</span> uniquement selon votre suivi habituel
+      </div>
+    </div>
+  </section>
+
+  <!-- RECETTES -->
+  <section class="page" id="page-recettes" style="display:none;">
+    <div class="card">
+      <h2>🍹 Mes recettes personnalisées</h2>
+      <div style="font-size:0.85rem;color:var(--ink-mute);margin-bottom:10px;">
+        Créez vos propres recettes et ajoutez-les en 1 clic à votre plan du jour.
+      </div>
+      
+      <div style="background:var(--navy);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;">
+        <h3 style="font-size:0.9rem;color:var(--gold-text);margin:0 0 8px;">📝 Créer une recette</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+          <input type="text" id="recipeNameInput" placeholder="Nom de la recette" style="flex:2;min-width:150px;background:var(--navy-deep);border:1px solid var(--line);border-radius:6px;padding:6px 10px;color:var(--ink);">
+          <select id="recipeTagSelect" style="background:var(--navy-deep);border:1px solid var(--line);border-radius:6px;padding:6px 10px;color:var(--ink);">
+            <option value="post-workout">🏋️ Post-workout</option>
+            <option value="smoothie">🍹 Smoothie</option>
+            <option value="collation">🥨 Collation</option>
+            <option value="repas">🍽️ Repas</option>
+            <option value="recup">🧘 Récupération</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="recipeIngredientSearch" list="foodList" placeholder="Ingrédient..." style="flex:1;min-width:100px;background:var(--navy-deep);border:1px solid var(--line);border-radius:6px;padding:6px 10px;color:var(--ink);">
+          <input type="number" id="recipeIngredientQty" placeholder="g" step="5" value="100" inputmode="decimal" style="width:76px;background:var(--navy-deep);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:16px;color:var(--ink);min-height:40px;">
+          <button class="btn-sm gold" onclick="addIngredientToRecipe()">➕ Ajouter</button>
+        </div>
+        <div id="recipeIngredientList" style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn" onclick="saveRecipe()">💾 Enregistrer la recette</button>
+          <button class="btn-sm slate" onclick="clearRecipeForm()">🗑️ Effacer</button>
+        </div>
+        <div id="recipeMacroPreview" style="font-size:0.8rem;color:var(--ink-mute);margin-top:6px;"></div>
+      </div>
+      
+      <h3 style="font-size:0.9rem;color:var(--gold-text);margin:12px 0 6px;">📋 Mes recettes</h3>
+      <div id="recipeList"></div>
+    </div>
+
+    <div class="card instructions">
+      <h3>💡 Comment utiliser les recettes</h3>
+      <ul>
+        <li>Créez une recette avec ses ingrédients et ses macros.</li>
+        <li>Dans l'onglet <b>Nutrition</b>, cliquez sur le bouton de la recette pour l'ajouter en 1 clic au plan du jour.</li>
+        <li>Les recettes sont automatiquement catégorisées (post-workout, smoothie, etc.).</li>
+        <li>La jauge de potassium s'adapte automatiquement.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- RESPIRATION -->
+  <section class="page" id="page-respiration" style="display:none;">
+    <div class="card">
+      <h2>🫁 Respiration & Relaxation</h2>
+      <p style="font-size:0.85rem;color:var(--ink-mute);">Une séance de respiration guidée aide à faire baisser le stress perçu et, avec la pratique régulière, peut contribuer à une tension plus stable. Choisissez une technique :</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button type="button" class="btn-sm gold" id="breathModeBtn478" onclick="selectBreathMode('478')">4-7-8 (relaxation rapide)</button>
+        <button type="button" class="btn-sm slate" id="breathModeBtnCoherence" onclick="selectBreathMode('coherence')">Cohérence cardiaque (5 min)</button>
+      </div>
+
+      <div id="breathWidget" style="text-align:center;padding:20px 0;">
+        <div id="breathCircle" style="width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,var(--gold-dim),var(--navy));border:2px solid var(--gold);margin:0 auto;display:flex;align-items:center;justify-content:center;transition:transform 1s ease-in-out;">
+          <span id="breathPhaseLabel" style="font-size:0.9rem;color:var(--ink);font-weight:700;">Prêt</span>
+        </div>
+        <div id="breathCountdown" style="font-size:1.4rem;font-weight:700;color:var(--gold-text);margin-top:12px;">—</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:14px;">
+          <button type="button" class="btn gold" id="breathStartBtn" onclick="startBreathing()">▶️ Démarrer</button>
+          <button type="button" class="btn-sm danger" id="breathStopBtn" onclick="stopBreathing(false)" style="display:none;">⏹️ Arrêter</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📋 Historique des séances</h3>
+      <div id="breathHistory" style="font-size:0.8rem;color:var(--ink-mute);"></div>
+    </div>
+  </section>
+
+  <!-- CYCLE -->
+  <section class="page" id="page-cycle" style="display:none;">
+    <div class="card">
+      <h2>🔄 Cycle 12 sem. · <span id="cycleProgramLabel">Programme</span> <span id="cycleLockBadge" style="font-size:0.7rem;color:var(--green-text);margin-left:8px;">🔓 DÉVERROUILLÉ</span></h2>
+      <div id="cycleContainer"></div>
+    </div>
+    <div class="card">
+      <h2>📊 Progression des charges</h2>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead><tr><th>Sem.</th><th>DC</th><th>Incl H</th><th>Incl B</th><th>Écartés</th><th>Épaules</th><th>Biceps</th><th>Triceps</th><th>Squat</th><th>SDT</th></tr></thead>
+          <tbody id="progBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SUIVI -->
+  <section class="page" id="page-suivi" style="display:none;">
+    <div class="card">
+      <h2>📊 Mesures</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <button type="button" class="btn-sm slate" id="csvImportOpenBtn">📂 Importer CSV</button>
+        <input type="file" accept=".csv" id="csvImportBtn" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
+        <button class="btn-sm gold" id="exportBtn">⬇️ Exporter JSON</button>
+        <button type="button" class="btn-sm slate" id="exportCsvBtn">⬇️ Exporter CSV</button>
+        <button type="button" class="btn-sm slate" id="exportTensionBtn">🩺 Export tension (médecin)</button>
+        <button type="button" class="btn-sm slate" id="jsonImportOpenBtn">⬆️ Importer JSON</button>
+        <input type="file" accept=".json" id="importBtn" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
+        <button class="btn-sm danger" id="clearBtn">🗑️ Effacer</button>
+        <button type="button" class="btn-sm slate" id="restoreBackupBtn" style="display:none;">🩹 Récupérer une sauvegarde corrompue</button>
+      </div>
+      <div id="saveMsg" style="font-size:0.8rem;color:var(--gold-text);margin-bottom:8px;"></div>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead><tr><th>Date</th><th>Poids</th><th>Taille</th><th>Poitrine</th><th>MG %</th><th>Muscle %</th><th>Eau %</th><th>SYS/DIA</th><th>Pouls</th><th>☀️ h</th><th>DC</th><th>Remarque</th><th style="width:70px;">Actions</th></tr></thead>
+          <tbody id="suiviBody">
+            <tr id="newRow">
+              <td><input type="date" id="new-date"></td>
+              <td><input type="number" step="0.1" placeholder="81.5" id="new-poids"></td>
+              <td><input type="number" step="0.5" placeholder="90" id="new-taille"></td>
+              <td><input type="number" step="0.5" placeholder="98" id="new-poitrine"></td>
+              <td><input type="number" step="0.1" placeholder="22.3" id="new-mg"></td>
+              <td><input type="number" step="0.1" placeholder="39.7" id="new-muscle"></td>
+              <td><input type="number" step="0.1" placeholder="52.1" id="new-eau"></td>
+              <td><input type="text" placeholder="120/80" id="new-tension"></td>
+              <td><input type="number" placeholder="72" id="new-pulse"></td>
+              <td><input type="number" step="0.5" placeholder="0" id="new-sun"></td>
+              <td><input type="text" placeholder="55×8" id="new-dc"></td>
+              <td><input type="text" placeholder="fatigue, stress..." id="new-note"></td>
+              <td><button class="btn-sm gold" id="addNewBtn">➕</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📐 Moyennes, tendances & bilan 14 jours</h2>
+      <div id="trendSummary" class="trend-grid"></div>
+      <div id="biweeklyAssessment" class="trajectory-box">Bilan en attente de mesures suffisantes.</div>
+    </div>
+
+    <div class="card">
+      <h2>📈 Graphiques</h2>
+      <div class="chart-grid">
+        <div class="chart-box"><h4>Poids (kg)</h4><div id="chartWeight"></div></div>
+        <div class="chart-box"><h4>Masse grasse (%)</h4><div id="chartFat"></div></div>
+        <div class="chart-box"><h4>Muscle (%)</h4><div id="chartMuscle"></div></div>
+        <div class="chart-box"><h4>Eau (%)</h4><div id="chartWater"></div></div>
+        <div class="chart-box"><h4>Taille (cm)</h4><div id="chartWaist"></div></div>
+        <div class="chart-box"><h4>Poitrine (cm)</h4><div id="chartChest"></div></div>
+        <div class="chart-box"><h4>Tension (SYS/DIA)</h4><div id="chartTension"></div></div>
+        <div class="chart-box"><h4>☀️ Bronzage vs Tension</h4><div id="chartSunTension"></div></div>
+        <div class="chart-box" style="grid-column:1/-1;"><h4>🍌 Potassium — ajouts datés (mg)</h4><div id="chartPotassium"></div></div>
+        <div class="chart-box" style="grid-column:1/-1;"><h4>Force DC (kg)</h4><div id="chartStrength"></div></div>
+      </div>
+      <div class="chart-legend">
+        <span><i class="dot" style="background:var(--gold);"></i> Mesures</span>
+        <span><i class="dot" style="background:var(--good);"></i> Tendance</span>
+        <span><i class="dot" style="background:var(--red);"></i> Tension SYS</span>
+        <span><i class="dot" style="background:var(--orange);"></i> Tension DIA</span>
+        <span><i class="dot" style="background:#facc15;"></i> Exposition solaire</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🎯 Repères — prise musculaire contrôlée</h2>
+      <ul style="margin:0;padding-left:18px;color:var(--ink-mute);font-size:0.85rem;">
+        <li>✔ Poids : cible +0,10 à +0,25 %/semaine, analysée sur moyennes 7/14 jours</li>
+        <li>✔ Tour de taille : évolution contenue</li>
+        <li>✔ Poitrine et développé couché : tendance positive recherchée</li>
+        <li>✔ Composition corporelle : muscle stable/hausse, masse grasse surveillée</li>
+        <li>✔ Protéines : cible calculée automatiquement selon le poids</li>
+        <li>✔ Bilan combiné : actualisé par fenêtre de 14 jours</li>
+        <li>✔ <span style="color:var(--danger-text);">⚠️ Diastolique < 90</span></li>
+        <li>✔ <span style="color:var(--orange-text);">☀️ Bronzage limité à 2h/jour</span></li>
+        <li>✔ <span style="color:var(--green-text);">💊 Supplément personnalisé (si prescrit / choisi)</span></li>
+      </ul>
+    </div>
+
+    <div class="card instructions">
+      <h3>📖 Mode d'emploi V5.7.1 — Construction musculaire</h3>
+      <ul>
+        <li><b>🧠 État du Jour</b> : Fatigue, sommeil, stress, heure de coucher.</li>
+        <li><b>🤖 Recommandation adaptative</b> : Calculée à partir de la tension et de l'état du jour.</li>
+        <li><b>🫁 Respiration</b> : Techniques 4-7-8 ou cohérence cardiaque.</li>
+        <li><b>💧 Hydratation</b> : Suivi eau, infusions et pastèque (objectif 2L/jour).</li>
+        <li><b>💊 Vitamine D3</b> : Bouton dédié pour valider la prise quotidienne.</li>
+        <li><b>🍹 Recettes</b> : Créez et ajoutez en 1 clic.</li>
+        <li><b>📈 Suivi</b> : Graphiques, export tension pour le médecin.</li>
+        <li><b>🧭 Mode du jour</b> : Standard, VTT, marche, vacances ou récupération, indépendamment du programme.</li>
+        <li><b>✏️ Éditeur de charges</b> : Modifiez les charges pour chaque semaine dans l'onglet Cycle.</li>
+        <li><b>⏱️ Tempos & repos</b> : Tous les exercices affichent tempo, repos entre séries et entre exercices.</li>
+        <li><b>📈 Progression</b> : RIR, qualité, technique, douleur et récupération alimentent un moteur unique.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+
+<footer style="text-align:center;padding:20px;color:var(--ink-mute);font-size:0.7rem;">Phases 60+ · V5.7.1 · Construction musculaire · Application autonome</footer><section class="page" id="page-profil" style="display:none;"><div class="card"><h2>👤 Profil & objectifs</h2><div class="add-food-grid"><label>Âge <input id="pAge" type="number"></label><label>Taille cm <input id="pHeight" type="number"></label><label>Poids kg <input id="pWeight" type="number" step="0.1"></label></div><div class="add-food-grid"><label>Sodium mg/j <input id="pSodium" type="number"></label><label>Potassium mg/j <input id="pPotassium" type="number"></label><label>Hydratation ml/kg <input id="pHydration" type="number"></label></div><div class="add-food-grid"><label>Supplément suivi <input id="pSupplement" type="text"></label><label>Dose personnalisée <input id="pDose" type="text"></label></div><button class="btn" onclick="saveProfile()">💾 Enregistrer</button></div><div class="card"><h2>🩺 Prudence du jour</h2><label class="cycle-check-label"><input type="checkbox" id="pSymptoms" onchange="state.symptomsToday=this.checked;saveState();updateStatus();renderAdaptiveRecommendation();"> Symptômes inhabituels aujourd’hui</label><div style="font-size:.75rem;color:var(--ink-mute);">Une mesure isolée n’est plus traduite en « autorisé/interdit ». SYS, DIA, symptômes et récupération sont combinés.</div></div><div class="card"><h2>💾 Sauvegarde complète</h2><button class="btn" onclick="exportBackup()">💾 Sauvegarder</button> <button class="btn-sm slate" onclick="document.getElementById('restoreBackupFile').click()">♻️ Restaurer</button><input id="restoreBackupFile" type="file" accept=".json" style="display:none" onchange="restoreBackup(this.files[0])"></div></section>
+<script>
+// ============================================================
+// DONNÉES — V5.7
+// ============================================================
+
+// ============================================================
+// BASE DE DONNÉES ALIMENTAIRES
+// ============================================================
+const FOOD_DB = JSON.parse(document.getElementById('food-db-data').textContent);
+
+// ============================================================
+// CONSTANTES
+// ============================================================
+const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const PROGRAM_CONFIG = {
+  balanced: {
+    label: 'Équilibré',
+    sessions: ['Haut du corps complet','Jambes + équilibre','Récupération / cardio modéré','Full body','Mobilité + bras / épaules','VTT / Cardio','Repos / récupération'],
+    types: ['strength','strength','conditioning','hypertrophy','hypertrophy','cardio','recovery']
+  },
+  upper_focus: {
+    label: 'Upper Focus — Pectoraux',
+    sessions: ['Pectoraux lourd + dos','Jambes + épaules / biceps','Récupération / marche / mobilité','Pectoraux hypertrophie + dos / bras','Jambes légères + épaules','VTT facile / modéré','Repos / marche facile'],
+    types: ['strength','strength','conditioning','hypertrophy','hypertrophy','cardio','recovery']
+  }
+};
+const CAL_BASE = { vtt: 2400, marche: 2200, standard: 2100, vacances: 1850, recuperation: 1800 };
+const C_BASE = { vtt: 280, marche: 230, standard: 220, vacances: 170, recuperation: 160 };
+const F_BASE = { vtt: 70, marche: 65, standard: 55, vacances: 50, recuperation: 50 };
+
+// ============================================================
+// BLOC CONSTRUCTION MUSCULAIRE 8 SEMAINES (DÉFAUT)
+// ============================================================
+function toEven(n) { return Math.round(n / 2) * 2; }
+const CYCLE_LENGTH = 8;
+
+const CYCLE_WEEKS_DEFAULT = [];
+for (let w = 1; w <= CYCLE_LENGTH; w++) {
+  const progress = (w - 1) / Math.max(1, CYCLE_LENGTH - 1);
+  const weight = 40 + (55 - 40) * progress;
+  CYCLE_WEEKS_DEFAULT.push({
+    week: w,
+    charge_dc_plat: toEven(weight),
+    charge_incline_halteres: toEven(weight * 0.65),
+    charge_incline_barre: toEven(weight * 0.75),
+    charge_ecartes: toEven(weight * 0.50),
+    charge_epaules: toEven(weight * 0.45),
+    charge_biceps: toEven(weight * 0.25),
+    charge_triceps: toEven(weight * 0.30),
+    charge_squat: toEven(weight * 0.55),
+    charge_sdt: toEven(weight * 0.65)
+  });
+}
+
+const CYCLE_STORAGE_KEY = 'phases60_v5.7_cycle_charges';
+function getCycleWeeks() {
+  const stored = localStorage.getItem(CYCLE_STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length) {
+        // Compatibilité V5.7 : un ancien cycle de 12 semaines est conservé, mais le bloc actif utilise les 8 premières.
+        return CYCLE_WEEKS_DEFAULT.map((row, i) => Object.assign({}, row, parsed[i] || {}, {week:i + 1}));
+      }
+    } catch(e) {}
+  }
+  return CYCLE_WEEKS_DEFAULT.map(row => ({...row}));
+}
+function saveCycleWeeks(weeks) {
+  // Le bloc actif utilise 8 semaines, mais on préserve d'éventuelles semaines 9–12 d'une V5.7 antérieure.
+  let previous=[];
+  try { previous=JSON.parse(localStorage.getItem(CYCLE_STORAGE_KEY)||'[]'); } catch(e) {}
+  const tail=Array.isArray(previous)&&previous.length>CYCLE_LENGTH?previous.slice(CYCLE_LENGTH):[];
+  localStorage.setItem(CYCLE_STORAGE_KEY, JSON.stringify([...(weeks||[]).slice(0,CYCLE_LENGTH), ...tail]));
+}
+let CYCLE_WEEKS = getCycleWeeks();
+
+// ============================================================
+// EXERCICES AVEC TEMPOS ET REPOS COMPLETS
+// ============================================================
+const PROGRAM_EXERCISES = {
+  balanced: JSON.parse(document.getElementById('exercises-balanced-data').textContent),
+  upper_focus: JSON.parse(document.getElementById('exercises-upper-data').textContent)
+};
+function getProgramConfig() { return PROGRAM_CONFIG[state?.program] || PROGRAM_CONFIG.balanced; }
+function getExercises() { return PROGRAM_EXERCISES[state?.program] || PROGRAM_EXERCISES.balanced; }
+
+let _WARMUPS = null;
+function getWarmups() { if (!_WARMUPS) _WARMUPS = JSON.parse(document.getElementById('warmups-data').textContent); return _WARMUPS; }
+
+// ============================================================
+// SUITE : STOCKAGE, TENSION, ETC.
+// ============================================================
+function getMealsForDay(dayMode, dayId) {
+  const isVTT = dayMode === 'vtt';
+  const isMarche = dayMode === 'marche';
+  const isVacances = dayMode === 'vacances';
+  const isRecuperation = dayMode === 'recuperation';
+  const isDimanche = dayId === 7;
+  
+  if (isRecuperation) {
+    return [
+      {name:"Petit-déjeuner", time:"08h00", foods:[["Œufs","3"],["Flocons avoine","40 g"],["Lait soja","250 ml"],["Fruits","150 g"],["Skyr","100 g"],["Vitamine D3 2000 UI","1 gélule"]], m:{calories:530,protein:36,carbs:48,fat:18}},
+      {name:"Déjeuner", time:"12h30", foods:[["Poulet / Dinde","150 g"],["Riz complet / Patate douce","120 g"],["Légumes","250 g"],["Huile olive","6 g"]], m:{calories:480,protein:40,carbs:38,fat:10}},
+      {name:"Collation Pastèque", time:"16h00", foods:[["Pastèque","200 g"]], m:{calories:60,protein:1.2,carbs:15.2,fat:0.4}},
+      {name:"Dîner", time:"20h00", foods:[["Poisson","150 g"],["Légumes verts","300 g"],["Huile olive","5 g"]], m:{calories:360,protein:36,carbs:12,fat:8}}
+    ];
+  }
+  
+  if (isVacances) {
+    return [
+      {name:"Petit-déjeuner", time:"08h00", foods:[["Œufs","3"],["Flocons avoine","40 g"],["Lait soja","250 ml"],["Fruits","150 g"],["Skyr","100 g"],["Vitamine D3 2000 UI","1 gélule"]], m:{calories:530,protein:34,carbs:48,fat:19}},
+      {name:"Déjeuner", time:"12h30", foods:[["Poulet / Dinde","150 g"],["Riz complet / Patate douce","130 g"],["Légumes","250 g"],["Huile olive","6 g"]], m:{calories:500,protein:42,carbs:42,fat:11}},
+      {name:"Collation Pastèque", time:"16h00", foods:[["Pastèque","200 g"]], m:{calories:60,protein:1.2,carbs:15.2,fat:0.4}},
+      {name:"Dîner", time:"20h00", foods:[["Poisson","150 g"],["Légumes verts","300 g"],["Huile olive","5 g"]], m:{calories:360,protein:36,carbs:12,fat:8}}
+    ];
+  }
+  
+  if (isVTT && !isDimanche) {
+    return [
+      {name:"Petit-déj (avant VTT)", time:"06h30", foods:[["Banane","120 g"],["Flocons avoine","40 g"],["Lait soja","250 ml"],["Miel","10 g"]], m:{calories:420,protein:10,carbs:72,fat:6}},
+      {name:"Petit-déj (après VTT)", time:"08h00", foods:[["Œufs","3"],["Pain complet","60 g"],["Skyr","150 g"],["Huile d'olive","4 g"],["Vitamine D3 2000 UI","1 gélule"]], m:{calories:570,protein:36,carbs:38,fat:26}},
+      {name:"Déjeuner", time:"12h30", foods:[["Blanc poulet","180 g"],["Riz complet cuit","180 g"],["Haricots verts","250 g"],["Huile olive","8 g"]], m:{calories:730,protein:62,carbs:70,fat:16}},
+      {name:"Collation Pastèque", time:"16h00", foods:[["Pastèque","200 g"]], m:{calories:60,protein:1.2,carbs:15.2,fat:0.4}},
+      {name:"Dîner", time:"20h00", foods:[["Cabillaud","180 g"],["Patate douce cuite","150 g"],["Brocolis","250 g"],["Huile olive","6 g"]], m:{calories:470,protein:45,carbs:38,fat:8}}
+    ];
+  }
+  if (isMarche) {
+    return [
+      {name:"Petit-déjeuner", time:"07h00", foods:[["Œufs","3"],["Pain complet","60 g"],["Skyr","150 g"],["Banane","120 g"],["Miel","10 g"],["Vitamine D3 2000 UI","1 gélule"]], m:{calories:670,protein:39,carbs:68,fat:24}},
+      {name:"Déjeuner", time:"12h30", foods:[["Blanc poulet","160 g"],["Riz complet cuit","160 g"],["Haricots verts","250 g"],["Huile olive","8 g"]], m:{calories:620,protein:58,carbs:58,fat:14}},
+      {name:"Collation Pastèque", time:"16h00", foods:[["Pastèque","200 g"]], m:{calories:60,protein:1.2,carbs:15.2,fat:0.4}},
+      {name:"Dîner", time:"20h00", foods:[["Cabillaud","180 g"],["Patate douce cuite","100 g"],["Brocolis","250 g"],["Huile olive","5 g"]], m:{calories:430,protein:42,carbs:32,fat:7}}
+    ];
+  }
+  // Standard
+  return [
+    {name:"Petit-déjeuner", time:"07h00", foods:[["Œufs","3"],["Flocons avoine","50 g"],["Lait soja","250 ml"],["Fruits","150 g"],["Skyr","100 g"],["Vitamine D3 2000 UI","1 gélule"]], m:{calories:580,protein:36,carbs:55,fat:20}},
+    {name:"Déjeuner", time:"12h30", foods:[["Poulet / Dinde","160 g"],["Riz complet / Patate douce","160 g"],["Légumes","250 g"],["Huile olive","8 g"]], m:{calories:580,protein:50,carbs:55,fat:12}},
+    {name:"Collation Pastèque", time:"16h00", foods:[["Pastèque","200 g"]], m:{calories:60,protein:1.2,carbs:15.2,fat:0.4}},
+    {name:"Dîner", time:"20h00", foods:[["Poisson","160 g"],["Patate douce / Riz","100 g"],["Légumes verts","250 g"],["Huile olive","6 g"]], m:{calories:430,protein:42,carbs:38,fat:9}}
+  ];
+}
+
+function generateMeals(dayMode) {
+  const baseCal = CAL_BASE[dayMode] || 2100;
+  const baseC = C_BASE[dayMode] || 220;
+  const baseF = F_BASE[dayMode] || 55;
+  return DAY_NAMES.map((name, i) => {
+    const id = i + 1;
+    const calAdjust = [0, 0, -150, 0, 0, -100, -400];
+    const cal = baseCal + calAdjust[i];
+    return {
+      id, name, short: DAY_SHORT[i], session: PROGRAM_CONFIG.balanced.sessions[i], type: PROGRAM_CONFIG.balanced.types[i],
+      totals: { calories: cal, protein: null, carbs: baseC, fat: baseF },
+      meals: getMealsForDay(dayMode, id)
+    };
+  });
+}
+
+const DAY_MODE_DATA = {
+  vtt: { label: 'VTT', days: generateMeals('vtt') },
+  marche: { label: 'Marche 2h', days: generateMeals('marche') },
+  standard: { label: 'Standard', days: generateMeals('standard') },
+  vacances: { label: '🏖️ Vacances', days: generateMeals('vacances') },
+  recuperation: { label: '🧘 Récupération', days: generateMeals('recuperation') }
+};
+
+function calculateProteinTarget(weightKg) {
+  const weight = Math.max(40, Number(weightKg) || 80);
+  return Math.round(weight * 1.8);
+}
+function calculateProteinRange(weightKg) {
+  const weight = Math.max(40, Number(weightKg) || 80);
+  return [Math.round(weight * 1.6), Math.round(weight * 2.0)];
+}
+function muscleCalorieTarget(baseCalories, type) {
+  const surplus = (type === 'strength' || type === 'hypertrophy') ? 200 : (type === 'conditioning' || type === 'cardio') ? 100 : 50;
+  return baseCalories + surplus;
+}
+function getLatestTrackedMetric(metric) {
+  const logs = Array.isArray(state?.logs) ? state.logs : [];
+  const valid = logs.filter(l => /^\d{4}-\d{2}-\d{2}$/.test(l?.date || ''))
+    .filter(l => l?.[metric] !== null && l?.[metric] !== '' && Number.isFinite(Number(l?.[metric])))
+    .sort((a,b) => String(b.date).localeCompare(String(a.date)));
+  if (!valid.length) return null;
+  return { value:Number(valid[0][metric]), date:valid[0].date };
+}
+function getEffectiveWeight() {
+  const tracked = getLatestTrackedMetric('weight');
+  if (tracked && tracked.value > 0) return tracked.value;
+  const profileWeight = Number(state?.profile?.weight);
+  return Number.isFinite(profileWeight) && profileWeight > 0 ? profileWeight : 80;
+}
+function getDays() {
+  const base = (DAY_MODE_DATA[state.dayMode] || DAY_MODE_DATA.standard).days;
+  const cfg = getProgramConfig();
+  const protein = calculateProteinTarget(getEffectiveWeight());
+  return base.map((d, i) => ({
+    ...d,
+    session: cfg.sessions[i],
+    type: cfg.types[i],
+    totals: { ...d.totals, calories: muscleCalorieTarget(d.totals.calories, cfg.types[i]), protein }
+  }));
+}
+function getDay(id) { return getDays().find(d=>d.id===id); }
+
+// ============================================================
+// STOCKAGE V5.7 + MIGRATION NON DESTRUCTIVE
+// ============================================================
+const LS_KEY = 'phases60_v5.7';
+const LEGACY_STATE_KEY = 'phases60_v5.4';
+const LEGACY_CYCLE_KEY = 'custom_cycle_charges';
+const LS_BACKUP_KEY = 'phases60_v5.7_corrupted_backup';
+const DEFAULT_STATE = {
+  schemaVersion: 7,
+  goal: 'muscle_building',
+  program: 'balanced',
+  dayMode: 'standard',
+  mealsEaten: {}, checklist: {}, logs: [], cycleDone: {}, extras: {}, recipes: [],
+  tension: { sys: 120, dia: 80, pulse: 72, sun: 0 }, temperature: 24,
+  dailyState: {}, hydration: {}, breathingSessions: [], mealReplacements: {},
+  vitamineD: false, vitamineDHistory: {},
+  profile: { age:60, height:180, weight:81.5, sodiumTarget:2000, potassiumTarget:3500, hydrationMlKg:30, supplementLabel:'Supplément personnalisé', supplementDose:'' },
+  nutritionSnapshots: {}, symptomsToday: false, cyclePerformance: {},
+  biweeklyAssessments: [], migration: null
+};
+function cloneDefaultState() { return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
+function normalizeStateV57(source, migratedFrom) {
+  const src = source && typeof source === 'object' ? source : {};
+  const out = Object.assign(cloneDefaultState(), src);
+  out.schemaVersion = 7;
+  out.goal = 'muscle_building';
+  out.program = src.program === 'upper_focus' ? 'upper_focus' : 'balanced';
+  out.dayMode = src.dayMode || src.phase || 'standard';
+  if (!DAY_MODE_DATA[out.dayMode]) out.dayMode = 'standard';
+  delete out.phase;
+  out.profile = Object.assign({}, DEFAULT_STATE.profile, src.profile || {});
+  out.logs = Array.isArray(src.logs) ? src.logs : [];
+  out.cyclePerformance = Object.assign({}, src.cyclePerformance || {});
+  out.cycleDone = Object.assign({}, src.cycleDone || {});
+  // Copier les clés historiques vers l'espace du programme Équilibré sans supprimer les originales.
+  Object.keys(src.cyclePerformance || {}).forEach(key => {
+    if (/^(vtt|marche|standard|vacances|recuperation)_week\d+_/.test(key)) {
+      const migratedKey = `balanced::${key}`;
+      if (!out.cyclePerformance[migratedKey]) out.cyclePerformance[migratedKey] = src.cyclePerformance[key];
+    }
+  });
+  Object.keys(src.cycleDone || {}).forEach(key => {
+    if (/^(vtt|marche|standard|vacances|recuperation)_week_\d+$/.test(key)) {
+      const migratedKey = `balanced::${key}`;
+      if (!out.cycleDone[migratedKey]) out.cycleDone[migratedKey] = src.cycleDone[key];
+    }
+  });
+  out.biweeklyAssessments = Array.isArray(src.biweeklyAssessments) ? src.biweeklyAssessments : [];
