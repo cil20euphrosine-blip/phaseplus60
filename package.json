@@ -1,0 +1,13 @@
+{
+  "name": "phase60plus",
+  "version": "5.9.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/data.test.cjs",
+    "test:browser": "node tests/browser.cjs",
+    "test:upgrade": "node tests/upgrade.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2"
+  }
+}
