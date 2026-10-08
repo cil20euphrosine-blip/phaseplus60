@@ -31,6 +31,7 @@ const shell=['index.html','service-worker.js','manifest.webmanifest','icon-192.p
   const charges=JSON.stringify(Array.from({length:12},(_,i)=>({week:i+1,charge_dc:37.5+i,unknown:'kept'})));
   await page.evaluate(async({fixture,charges})=>{Object.assign(state,fixture);saveState();localStorage.setItem(CYCLE_STORAGE_KEY,charges);localStorage.setItem('phase60_theme','light');await caches.open('unrelated-cache');},{fixture,charges});
   await context.setOffline(true);await page.reload();assert.match(await page.title(),/V5.8/);assert.deepEqual(await page.evaluate(()=>state.logs),fixture.logs);
+  const beforeUpgrade=await page.evaluate(fields=>Object.fromEntries(fields.map(k=>[k,state[k]])),Object.keys(fixture));
   await context.setOffline(false);upgraded=true;
   await page.evaluate(async()=>{const reg=await navigator.serviceWorker.getRegistration();await reg.update();});
   await page.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);
@@ -39,7 +40,7 @@ const shell=['index.html','service-worker.js','manifest.webmanifest','icon-192.p
   await page.goto(url);await page.waitForFunction(()=>typeof renderV59==='function');
   await page.waitForFunction(async()=>!(await navigator.serviceWorker.getRegistration()).waiting);
   await context.setOffline(true);await page.reload();await page.waitForFunction(()=>typeof renderV59==='function');assert.match(await page.title(),/V5.9/);
-  for(const field of Object.keys(fixture))assert.deepEqual(await page.evaluate(k=>state[k],field),fixture[field],field+' must survive the PWA update');
+  for(const field of Object.keys(fixture))assert.deepEqual(await page.evaluate(k=>state[k],field),beforeUpgrade[field],field+' must survive the PWA update');
   assert.equal(await page.evaluate(()=>localStorage.getItem(CYCLE_STORAGE_KEY)),charges);
   assert.equal(await page.evaluate(()=>localStorage.getItem('phase60_theme')),'light');
   const cachesAfter=await page.evaluate(()=>caches.keys());assert.ok(cachesAfter.includes('unrelated-cache'));assert.ok(cachesAfter.includes('phase60plus-pwa-v5.9-1'));assert.ok(!cachesAfter.includes('phase60plus-pwa-v5.8-1'));
