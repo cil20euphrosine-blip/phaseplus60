@@ -1,0 +1,26 @@
+name: V5.9 data and PWA tests
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [test/v5.9]
+permissions:
+  contents: read
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: |
+          python3 -m http.server 8765 > /tmp/phase60plus-server.log 2>&1 &
+          npm run test:browser
+      - run: npm run test:upgrade
