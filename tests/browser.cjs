@@ -17,5 +17,21 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
  await page.setInputFiles('#importBtn',{name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{"wrong":true}')});await page.waitForFunction(()=>document.getElementById('saveMsg').textContent.includes('invalide'));assert.equal(await page.evaluate(()=>state.logs.length),1);
  await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await page.reload();await page.waitForFunction(()=>navigator.serviceWorker.controller!==null);const manifest=await page.evaluate(async()=>await (await fetch('./manifest.webmanifest')).json());assert.equal(manifest.display,'standalone');for(const icon of manifest.icons){const dimensions=await page.evaluate(async src=>{const i=new Image();i.src=src;await i.decode();return [i.naturalWidth,i.naturalHeight];},icon.src);assert.equal(dimensions.join('x'),icon.sizes);}
  await page.evaluate(async()=>{await caches.open('unrelated-cache');});await context.setOffline(true);await page.reload();await page.waitForFunction(()=>typeof renderV59==='function');await page.click('[data-page="pectoraux"]');assert.match(await page.textContent('#v59ChestFeedback'),/enregistrée/);assert.ok(await page.evaluate(()=>state.v59.nutrition));await page.screenshot({path:'/tmp/phaseplus60-v59-mobile.png',fullPage:true});
+ await context.setOffline(false);
+ for(const theme of ['dark','light']){
+  await page.evaluate(t=>document.body.classList.toggle('light-theme',t==='light'),theme);
+  for(const tab of ['cycle','pectoraux','ventre']){
+   await page.click('[data-page="'+tab+'"]');
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'No horizontal page overflow: '+theme+' '+tab);
+   if(tab!=='cycle'){
+    assert.equal(await page.locator('#page-'+tab+' .training-week').count(),1);
+    assert.equal(await page.locator('#page-'+tab+' fieldset').count(),0);
+    const details=page.locator('#page-'+tab+' .training-week');
+    await details.locator('summary').click();assert.equal(await details.getAttribute('open'),null);
+    await details.locator('summary').click();assert.notEqual(await details.getAttribute('open'),null);
+   }
+   await page.screenshot({path:'/tmp/phase60-'+theme+'-'+tab+'.png',fullPage:true});
+  }
+ }
  assert.deepEqual(errors,[]);console.log('PASS: legacy storage, four modules, reload, complete backup restore, partial JSON import, invalid JSON rejection, mobile UI, manifest/icons, service worker and offline reload');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1);});

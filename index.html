@@ -219,6 +219,25 @@
   .perf-btn{padding:2px 8px;font-size:0.6rem;min-height:24px;border-radius:12px;border:none;cursor:pointer;background:var(--gold);color:var(--on-accent);font-weight:700;}
 
   @media (max-width:480px){.stat-grid{grid-template-columns:repeat(2,1fr);}.chart-grid{grid-template-columns:1fr;}.trend-grid{grid-template-columns:1fr 1fr;}.tension-input{flex-direction:column;align-items:stretch;}.mode-btn{font-size:0.6rem;padding:6px 8px;}.control-stack{gap:6px;}}
+
+  /* The training modules reuse Cycle's week header and exercise rows. */
+  .training-week > summary{padding:8px 12px;font-weight:700;font-size:.9rem;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;background:var(--slate-light);border-bottom:1px solid var(--line);gap:8px;}
+  .training-week > summary::after{content:'▸';color:var(--gold-text);}
+  .training-week[open] > summary::after{content:'▾';}
+  .training-week-body{padding:10px 12px 14px;background:var(--navy-deep);}
+  .training-day{font-family:Georgia,serif;font-size:.95rem;margin:8px 0 4px;color:var(--gold-text);}
+  .training-exercise{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--line);font-size:.8rem;align-items:center;flex-wrap:wrap;gap:6px;}
+  .training-exercise-info{color:var(--ink-mute);font-size:.75rem;text-align:right;display:flex;gap:6px;align-items:center;flex-wrap:wrap;max-width:100%;}
+  .training-performance{display:inline-flex;gap:6px;align-items:center;background:var(--navy);padding:4px 6px;border-radius:12px;flex-wrap:wrap;max-width:100%;}
+  .training-performance label{display:inline-flex;gap:4px;align-items:center;}
+  .training-performance input[type=number],.training-performance select{width:64px;background:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px;font-size:16px;color:var(--ink);min-height:36px;}
+  .training-editor{margin:16px 0 12px;padding:16px;background:var(--slate);border:1px solid var(--line);border-radius:14px;}
+  .training-editor h3{font-family:Georgia,serif;color:var(--gold-text);margin:0 0 8px;}
+  .training-editor select{background:var(--navy);border:1px solid var(--line);border-radius:6px;padding:8px;color:var(--ink);font-size:16px;min-height:40px;}
+  .training-week-progress{font-size:.75rem;color:var(--ink-mute);margin-left:auto;}
+  .training-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  .training-feedback{font-size:.8rem;color:var(--gold-text);margin-top:8px;}
+
 </style>
 
 <!-- PWA -->
@@ -748,8 +767,23 @@
 </div>
 
 <div class="wrap">
-<section class="page" id="page-pectoraux" style="display:none"><div class="card"><h2>Pectoraux · bloc V5.9</h2><p>Lundi, mercredi, vendredi · séance totale de 45 min maximum. Ce bloc remplace le travail pectoral du cycle les jours concernés : ne pas cumuler les deux programmes.</p><label>Semaine du bloc <select id="v59Week"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></label><div id="v59ChestPlan"></div><p>2–3 répétitions en réserve (RIR), sans échec. En semaines 1–2 : environ un tiers de séries en moins. Garder le travail du dos et des jambes du programme existant, sans ajouter de séances.</p><p>Les exercices machine et poulie correspondent au programme discuté. À domicile : développé couché haltères et écartés haltères légers, uniquement avec un support stable et sans douleur.</p><div id="v59ChestLog"></div><button class="btn" id="v59SaveChest">Enregistrer la séance</button><p id="v59ChestFeedback" role="status"></p></div></section>
-<section class="page" id="page-ventre" style="display:none"><div class="card"><h2>Ventre plat · contrôle du tronc</h2><p>Lundi, mercredi, vendredi, en complément dans la limite des 45 min. Deux séries par exercice : gainage, dead bug, reverse crunch et Pallof press. Pallof : élastique ou poulie nécessaire.</p><p>Exécution contrôlée, respiration continue, 2–3 répétitions en réserve ; arrêter un mouvement douloureux. Le travail abdominal ne fait pas perdre la graisse localement. Suivre le tour de taille et la tendance du poids dans Suivi.</p><div id="v59CoreChecks"></div><button class="btn" id="v59SaveCore">Enregistrer</button><p id="v59CoreFeedback" role="status"></p></div></section>
+<section class="page" id="page-pectoraux" style="display:none">
+<div class="card"><h2>💪 Cycle 8 sem. · Pectoraux <span id="v59ChestBadge" style="font-size:.7rem;color:var(--green-text);margin-left:8px;"></span></h2>
+<div class="training-editor"><h3>📅 Semaine du bloc</h3><label for="v59Week" class="cycle-check-label">Semaine active <select id="v59Week"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></label></div>
+<details class="training-week" open><summary><span id="v59ChestWeekTitle">Semaine 1</span><span class="training-week-progress" id="v59ChestProgress">À réaliser</span></summary><div class="training-week-body">
+<h4 class="training-day">🏋️ Lundi · Mercredi · Vendredi</h4>
+<div class="warmup-box"><h4>🎯 Repères de séance</h4><ul><li><span>Durée totale</span><span>45 min maximum</span></li><li><span>Marge de travail</span><span>2–3 RIR · sans échec</span></li></ul></div>
+<div id="v59ChestPlan" class="tempo-legend"></div><div id="v59ChestLog"></div>
+<div class="training-actions"><button class="btn" id="v59SaveChest">💾 Enregistrer la séance</button></div><p id="v59ChestFeedback" class="training-feedback" role="status"></p>
+</div></details></div>
+<div class="instructions"><h3>📖 Repères du bloc Pectoraux</h3><ul><li>En semaines 1–2 : environ un tiers de séries en moins.</li><li>Ce bloc remplace le travail pectoral du cycle les jours concernés : ne pas cumuler les deux programmes.</li><li>Garder le travail du dos et des jambes du programme existant, sans ajouter de séances.</li><li>À domicile : développé couché haltères et écartés haltères légers, avec un support stable et sans douleur.</li></ul></div>
+</section>
+<section class="page" id="page-ventre" style="display:none">
+<div class="card"><h2>🧘 Cycle · Ventre plat</h2><details class="training-week" open><summary><span>Contrôle du tronc</span><span class="training-week-progress" id="v59CoreProgress">0/4</span></summary><div class="training-week-body">
+<h4 class="training-day">🧘 Lundi · Mercredi · Vendredi</h4><div class="warmup-box"><h4>🎯 Repères de séance</h4><ul><li><span>Travail abdominal</span><span>2 séries par exercice</span></li><li><span>Marge de travail</span><span>2–3 RIR</span></li></ul></div>
+<div id="v59CoreChecks"></div><div class="training-actions"><button class="btn" id="v59SaveCore">💾 Enregistrer la séance</button></div><p id="v59CoreFeedback" class="training-feedback" role="status"></p>
+</div></details></div><div class="instructions"><h3>📖 Repères du bloc Ventre plat</h3><ul><li>Complément dans la limite des 45 min de séance.</li><li>Exécution contrôlée, respiration continue ; arrêter un mouvement douloureux.</li><li>Pallof press : élastique ou poulie nécessaire.</li><li>Le travail abdominal ne fait pas perdre la graisse localement. Suivre le tour de taille et la tendance du poids dans Suivi.</li></ul></div>
+</section>
 <section class="page" id="page-recuperation" style="display:none"><div class="card"><h2>Récupération · sommeil fragmenté</h2><p>Repères discutés : 6–7 h de sommeil, 2–3 réveils, souvent pour uriner. Ces repères ne sont pas enregistrés comme des mesures réelles : renseigner chaque nuit.</p><form id="v59SleepForm"><div class="add-food-grid"><label>Durée (h)<input id="v59Hours" type="number" min="0" max="24" step="0.1" required></label><label>Réveils<input id="v59Awakenings" type="number" min="0" max="30" step="1" required></label><label>Levers pour uriner<input id="v59Urinations" type="number" min="0" max="30" step="1" required></label></div><label><input id="v59Tired" type="checkbox"> Fatigué au réveil</label><label>Ronflements / pauses observées <select id="v59Snoring"><option value="unknown">Inconnu</option><option value="no">Non observés</option><option value="yes">Observés</option></select></label><button class="btn" type="submit">Enregistrer la nuit</button></form><p id="v59RecoveryAdvice" role="status"></p><p>Le suivi décrit la récupération ; il ne détermine pas la cause des réveils. Si fatigue et levers nocturnes persistent, en parler au médecin. <a href="https://www.ameli.fr/assure/sante/themes/apnee-du-sommeil/symptomes-diagnostic-evolution" target="_blank" rel="noopener">Repères Ameli sur le sommeil</a>.</p><button class="btn-sm gold" onclick="exportBackup()">Sauvegarde JSON complète V5.9</button></div></section>
 
 </div>

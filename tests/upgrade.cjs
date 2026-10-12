@@ -43,7 +43,7 @@ const shell=['index.html','service-worker.js','manifest.webmanifest','icon-192.p
   for(const field of Object.keys(fixture))assert.deepEqual(await page.evaluate(k=>state[k],field),beforeUpgrade[field],field+' must survive the PWA update');
   assert.equal(await page.evaluate(()=>localStorage.getItem(CYCLE_STORAGE_KEY)),charges);
   assert.equal(await page.evaluate(()=>localStorage.getItem('phase60_theme')),'light');
-  const cachesAfter=await page.evaluate(()=>caches.keys());assert.ok(cachesAfter.includes('unrelated-cache'));assert.ok(cachesAfter.includes('phase60plus-pwa-v5.9-2'));assert.ok(!cachesAfter.includes('phase60plus-pwa-v5.8-1'));
+  const cachesAfter=await page.evaluate(()=>caches.keys());assert.ok(cachesAfter.includes('unrelated-cache'));assert.ok(cachesAfter.includes('phase60plus-pwa-v5.9-3'));assert.ok(!cachesAfter.includes('phase60plus-pwa-v5.8-1'));
   assert.deepEqual(errors,[]);
   console.log('PASS: installed V5.8 -> waiting V5.9 -> closing old window -> offline V5.9; history, profile, 12-week charges, theme, unknown fields and unrelated caches preserved');
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
