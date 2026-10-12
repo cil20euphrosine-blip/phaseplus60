@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [test/v5.9]
+    branches: [test/v5.9, fix/v59-cycle-layout]
 permissions:
   contents: read
 jobs:
@@ -24,3 +24,7 @@ jobs:
           python3 -m http.server 8765 > /tmp/phase60plus-server.log 2>&1 &
           npm run test:browser
       - run: npm run test:upgrade
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-design
+          path: /tmp/phase60-*.png

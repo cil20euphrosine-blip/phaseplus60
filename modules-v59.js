@@ -18,10 +18,15 @@ function renderV59(){
  document.getElementById('v59RecoveryAdvice').textContent=r.rest?'Repos conseillé aujourd’hui.':r.text;
  document.getElementById('v59SaveChest').disabled=r.rest;
  const saved=state.v59?.chest?.[todayKey()];
+ document.getElementById('v59ChestWeekTitle').textContent='Semaine '+week;
+ document.getElementById('v59ChestProgress').textContent=saved?'✅ Séance enregistrée':'À réaliser';
+ document.getElementById('v59ChestBadge').textContent=r.rest?'🔒 REPOS':r.reduce?'🧘 VOLUME ADAPTÉ':'🔓 OUVERT';
+ v59Exercises.forEach((x,i)=>document.getElementById('v59SetInfo'+i).textContent=sets[i]+'×'+x[2]);
+ document.getElementById('v59CoreProgress').textContent=v59Core.filter((x,i)=>document.getElementById('v59Core'+i)?.checked).length+'/4';
  if(saved)document.getElementById('v59ChestFeedback').textContent='Séance enregistrée aujourd’hui · '+saved.exercises.map(x=>x.feedback).join(' · ');
 }
 function v59Number(id,min,max){const raw=document.getElementById(id).value;if(raw==='')throw Error('Renseigner tous les champs');const n=Number(raw);if(!Number.isFinite(n)||n<min||n>max)throw Error('Valeur hors limites');return n;}
-document.getElementById('v59ChestLog').innerHTML=v59Exercises.map((x,i)=>`<fieldset><legend>${x[0]}</legend><div class="add-food-grid"><label>Charge kg<input id="v59Load${i}" type="number" min="0" max="500" step="0.5"></label><label>Répétitions (dernière série)<input id="v59Reps${i}" type="number" min="1" max="100"></label><label>RIR<input id="v59Rir${i}" type="number" min="0" max="10"></label></div><label><input id="v59Pain${i}" type="checkbox"> Douleur ou technique dégradée</label></fieldset>`).join('');
+document.getElementById('v59ChestLog').innerHTML=v59Exercises.map((x,i)=>`<div class="training-exercise"><span>${x[0]}</span><span class="training-exercise-info"><span id="v59SetInfo${i}"></span><span class="training-performance"><label for="v59Load${i}">kg <input id="v59Load${i}" type="number" min="0" max="500" step="0.5"></label><label for="v59Reps${i}">Reps <input id="v59Reps${i}" type="number" min="1" max="100"></label><label for="v59Rir${i}">RIR <input id="v59Rir${i}" type="number" min="0" max="10"></label></span><label class="cycle-check-label"><input class="cycle-checkbox" id="v59Pain${i}" type="checkbox"> Douleur / technique dégradée</label></span></div>`).join('');
 document.getElementById('v59SaveChest').addEventListener('click',()=>{
  try{
   const recovery=v59Recovery();if(recovery.rest)throw Error('Repos conseillé aujourd’hui');
@@ -34,8 +39,8 @@ document.getElementById('v59SaveChest').addEventListener('click',()=>{
   const m=v59Store();m.chest??={};m.chest[todayKey()]={week,exercises,date:todayKey()};saveState();renderV59();showToast('Séance pectoraux enregistrée');
  }catch(e){document.getElementById('v59ChestFeedback').textContent=e.message;}
 });
-document.getElementById('v59CoreChecks').innerHTML=v59Core.map((name,i)=>`<label style="display:block"><input id="v59Core${i}" type="checkbox"> ${name} · 2 séries réalisées</label>`).join('');
-document.getElementById('v59SaveCore').addEventListener('click',()=>{const m=v59Store();m.core??={};m.core[todayKey()]=v59Core.map((name,i)=>({name,done:document.getElementById('v59Core'+i).checked,sets:2}));saveState();document.getElementById('v59CoreFeedback').textContent='Travail abdominal enregistré';});
+document.getElementById('v59CoreChecks').innerHTML=v59Core.map((name,i)=>`<div class="training-exercise"><span>${name}</span><span class="training-exercise-info">2 séries <label class="cycle-check-label" for="v59Core${i}"><input class="cycle-checkbox" id="v59Core${i}" type="checkbox"> Réalisées</label></span></div>`).join('');
+document.getElementById('v59SaveCore').addEventListener('click',()=>{const m=v59Store();m.core??={};m.core[todayKey()]=v59Core.map((name,i)=>({name,done:document.getElementById('v59Core'+i).checked,sets:2}));saveState();document.getElementById('v59CoreFeedback').textContent='Travail abdominal enregistré';renderV59();});
 document.getElementById('v59SleepForm').addEventListener('submit',event=>{
  event.preventDefault();try{const hours=v59Number('v59Hours',0,24),awakenings=v59Number('v59Awakenings',0,30),urinations=v59Number('v59Urinations',0,30);if(!Number.isInteger(awakenings)||!Number.isInteger(urinations)||urinations>awakenings)throw Error('Vérifier le nombre de réveils et de levers');const m=v59Store();m.nights??={};m.nights[todayKey()]={hours,awakenings,urinations,tired:document.getElementById('v59Tired').checked,snoring:document.getElementById('v59Snoring').value};saveState();renderV59();renderAdaptiveRecommendation();renderMuscleDashboard();}catch(e){document.getElementById('v59RecoveryAdvice').textContent=e.message;}
 });
