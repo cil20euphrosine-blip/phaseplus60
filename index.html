@@ -728,7 +728,7 @@
     </div>
 
     <div class="card instructions">
-      <h3>📖 Mode d'emploi V5.7.1 — Construction musculaire</h3>
+      <h3>📖 Mode d'emploi V5.9 — Construction musculaire</h3>
       <ul>
         <li><b>🧠 État du Jour</b> : Fatigue, sommeil, stress, heure de coucher.</li>
         <li><b>🤖 Recommandation adaptative</b> : Calculée à partir de la tension et de l'état du jour.</li>
@@ -2027,7 +2027,7 @@ function renderDashboardStats() {
   const day = getDay(selectedDayId);
   if (!day) return;
   const subEl = document.getElementById('headerSub');
-  if (subEl) subEl.textContent = `V5.7 · ${getProgramConfig().label} · ${day.name} · ${day.session} · ${isTrainingLocked() ? '🔒 Prudence' : '🔓 Ouvert'}`;
+  if (subEl) subEl.textContent = `V5.9 · ${getProgramConfig().label} · ${day.name} · ${day.session} · ${isTrainingLocked() ? '🔒 Prudence' : '🔓 Ouvert'}`;
   const dashDay = document.getElementById('dashDay');
   if (dashDay) dashDay.textContent = day.name;
   const dashSession = document.getElementById('dashSession');
